@@ -1,49 +1,304 @@
 # NexGestion
+An Open-source local-first business management platform for SMEs.
 
-NexGestion is an open-source, local-first business management platform for small and medium-sized businesses.
+# NexGestion
 
-## Project Status
+**NexGestion** is an open-source, local-first business management platform designed for small and medium-sized businesses (SMEs).
 
-NexGestion is currently in the planning stage.
+The goal of NexGestion is to provide a simple, self-hosted, and modular alternative to traditional cloud-based enterprise software. Organizations can deploy the platform on a laptop, mini PC, or local server, allowing employees to access business services through their mobile devices or web browsers within the local network.
 
-The project scope, feature set, architecture, and implementation details are still being defined.
+## Vision
 
-## Goals
+Digital transformation should not require expensive subscriptions, complex infrastructure, or dependence on cloud providers.
 
-- Provide a local-first business management system for SMEs
-- Keep business data accessible even without a constant internet connection
-- Offer an open-source alternative to cloud-only business management tools
-- Design a flexible foundation for common business workflows
+NexGestion aims to help small businesses, restaurants, workshops, retail stores, schools, clubs, and local organizations manage their daily operations with a lightweight and flexible platform that they fully control.
 
-## Planned Features
+## Core Principles
 
-The exact feature set is still under discussion, but NexGestion may include modules such as:
+### Local-First
 
-- Customer and contact management
-- Product or inventory management
-- Sales and order tracking
-- Invoicing and payment records
-- Reporting and basic business insights
-- Role-based access control
+Run business systems on your own devices and local network.
 
-## Installation
+### Open Source
 
-Installation instructions will be added once the technical stack and initial implementation are ready.
+Transparent, customizable, and community-driven.
 
-## Development
+### Modular Architecture
 
-Development setup instructions will be added after the project structure is finalized.
+Install only the modules your organization needs.
 
-## Tech Stack
+### Self-Hosted
 
-The technology choices are still being evaluated.
+Own your data and infrastructure.
 
-## Contributing
+## Roadmap
 
-Contributions are not open yet while the project is still being planned.
+NexGestion is designed as a platform consisting of multiple business modules.
 
-Contribution guidelines will be added when the project is ready for external collaboration.
+### Foundation Modules
 
-## License
+- User Management
+- Authentication
+- Role Management
+- Permission Management
+- Organization Management
+- Team Management
+- Member Management
 
-The license has not been selected yet.
+### Human Resources (HR)
+
+- Attendance Tracking
+- Leave Management
+- Employee Directory
+- Shift Scheduling
+- Employee Profiles
+
+### Financial Management
+
+- Expense Tracking
+- Budget Management
+- Invoice Management
+- Financial Reports
+
+### Warehouse & Inventory
+
+- Inventory Tracking
+- Stock Management
+- Purchase Records
+- Supplier Management
+
+### Order Management
+
+- Order Tracking
+- Customer Management
+- Product Catalog
+- Sales Reports
+
+### Workspace Management
+
+- Meeting Room Reservation
+- Equipment Reservation
+- Shared Resource Scheduling
+- Office Space Booking
+
+### Additional Modules
+
+- Internal Announcement System
+- Task Management
+- Approval Workflow
+- Asset Management
+- Restaurant Ordering System
+- Visitor Registration
+- Custom Extensions
+
+## Planned Architecture
+
+```text
+NexGestion
+├── Core
+│   ├── Authentication
+│   ├── User Management
+│   ├── Role Management
+│   ├── Permission Management
+│   └── Organization Management
+│
+├── HR Module
+├── Finance Module
+├── Inventory Module
+├── Workspace Module
+├── Order Module
+└── Plugin System
+
+
+
+## Technology Stack
+
+NexGestion is built with modern, cross-platform technologies to ensure simple deployment and long-term maintainability.
+
+### Frontend
+
+- React
+- TypeScript
+- Vite
+- Ant Design (planned)
+
+### Backend
+
+- Go (Golang)
+- RESTful API
+- JWT Authentication (planned)
+
+### Database
+
+- SQLite (default)
+
+### Deployment
+
+- Windows
+- macOS
+- Linux
+
+## Architecture
+
+```text
+┌─────────────────┐
+│   Mobile/Web    │
+│     Browser     │
+└────────┬────────┘
+         │ HTTP
+         ▼
+┌─────────────────┐
+│ NexGestion API  │
+│    Go Server    │
+└────────┬────────┘
+         │
+         ▼
+┌─────────────────┐
+│     SQLite      │
+│    Database     │
+└─────────────────┘
+```
+
+## Development Requirements
+
+### Frontend
+
+- Node.js 22+
+- npm or pnpm
+
+### Backend
+
+- Go 1.24+
+
+### Database
+
+- SQLite 3+
+
+## Getting Started
+
+### Clone Repository
+
+```bash
+git clone https://github.com/<your-account>/NexGestion.git
+cd NexGestion
+```
+
+### Frontend Setup
+
+```bash
+cd frontend
+npm install
+npm run dev
+```
+
+or
+
+```bash
+pnpm install
+pnpm dev
+```
+
+Frontend will start at:
+
+```text
+http://localhost:5173
+```
+
+### Backend Setup
+
+```bash
+cd backend
+go mod tidy
+go run main.go
+```
+
+Backend API will start at:
+
+```text
+http://localhost:8080
+```
+
+### Production Build
+
+#### Frontend
+
+```bash
+npm run build
+```
+
+#### Backend
+
+```bash
+go build -o nexgestion
+```
+
+## Future Installation Experience
+
+The long-term goal of NexGestion is to provide a zero-configuration installation experience.
+
+Users should be able to:
+
+1. Download the installer.
+2. Run the executable.
+3. Automatically initialize the database.
+4. Open the management portal.
+5. Start using the system immediately.
+
+No manual installation of:
+
+- Go
+- Node.js
+- SQLite
+- Apache
+- Nginx
+- Docker
+
+should be required for end users.
+
+## Future Roadmap
+
+### Core Platform
+
+- Authentication
+- User Management
+- Role Management
+- Permission Management
+- Organization Management
+- Team Management
+
+### HR System
+
+- Attendance Tracking
+- Leave Requests
+- Employee Directory
+- Shift Scheduling
+
+### Finance System
+
+- Expense Tracking
+- Budget Management
+- Invoice Management
+
+### Inventory System
+
+- Product Management
+- Stock Tracking
+- Warehouse Management
+
+### Workspace System
+
+- Meeting Room Reservation
+- Equipment Reservation
+- Resource Scheduling
+
+### Order System
+
+- Customer Management
+- Order Tracking
+- Product Catalog
+
+### Plugin System
+
+- Third-party extensions
+- Custom modules
+- Community contributions
