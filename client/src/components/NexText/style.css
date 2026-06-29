@@ -1,0 +1,72 @@
+.nex-text {
+  margin: 0;
+}
+
+.nex-text--display {
+  color: var(--color-heading);
+  font-size: 36px;
+  font-weight: 700;
+  line-height: 44px;
+}
+
+.nex-text--title {
+  color: var(--color-heading);
+  font-size: 28px;
+  font-weight: 700;
+  line-height: 36px;
+}
+
+.nex-text--heading {
+  color: var(--color-heading);
+  font-size: 24px;
+  font-weight: 700;
+  line-height: 32px;
+}
+
+.nex-text--subheading {
+  color: var(--color-heading);
+  font-size: 18px;
+  font-weight: 600;
+  line-height: 26px;
+}
+
+.nex-text--body {
+  color: var(--color-content);
+  font-size: 16px;
+  font-weight: 400;
+  line-height: 24px;
+}
+
+.nex-text--label {
+  color: var(--color-text);
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 20px;
+}
+
+.nex-text--caption {
+  color: var(--color-muted);
+  font-size: 12px;
+  font-weight: 400;
+  line-height: 18px;
+}
+
+.nex-text--button {
+  color: inherit;
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 20px;
+}
+
+.nex-text--brand {
+  color: var(--color-heading);
+  font-size: 20px;
+  font-weight: 700;
+  line-height: 28px;
+}
+
+.nex-text--truncate {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}

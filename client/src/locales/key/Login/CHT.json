@@ -1,0 +1,11 @@
+{
+  "k_Main_PageTitle": "系統登入",
+  "k_Main_ImageAlt_LoginLogo": "登入標誌",
+  "k_Main_Title_WelcomeBack": "歡迎回來",
+  "k_Main_Content_Instruction": "請輸入帳號與密碼登入系統",
+  "k_Main_Label_Username": "帳號",
+  "k_Main_Placeholder_Username": "請輸入帳號",
+  "k_Main_Label_Password": "密碼",
+  "k_Main_Placeholder_Password": "請輸入密碼",
+  "k_Main_Button_Login": "登入"
+}

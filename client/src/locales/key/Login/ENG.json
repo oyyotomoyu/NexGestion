@@ -1,0 +1,11 @@
+{
+  "k_Main_PageTitle": "System Login",
+  "k_Main_ImageAlt_LoginLogo": "Login logo",
+  "k_Main_Title_WelcomeBack": "Welcome back",
+  "k_Main_Content_Instruction": "Enter your account and password to sign in",
+  "k_Main_Label_Username": "Account",
+  "k_Main_Placeholder_Username": "Enter your account",
+  "k_Main_Label_Password": "Password",
+  "k_Main_Placeholder_Password": "Enter your password",
+  "k_Main_Button_Login": "Login"
+}

@@ -16,6 +16,8 @@
     "surface": "#ffffff",
     "surfaceMuted": "#f2f4f7",
     "border": "#e5e7eb",
+    "focusRing": "#175cd333",
+    "shadow": "#1018281a",
     "success": "#067647",
     "warning": "#b54708",
     "danger": "#b42318",

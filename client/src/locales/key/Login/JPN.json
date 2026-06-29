@@ -1,0 +1,11 @@
+{
+  "k_Main_PageTitle": "システムログイン",
+  "k_Main_ImageAlt_LoginLogo": "ログインロゴ",
+  "k_Main_Title_WelcomeBack": "おかえりなさい",
+  "k_Main_Content_Instruction": "アカウントとパスワードを入力してログインしてください",
+  "k_Main_Label_Username": "アカウント",
+  "k_Main_Placeholder_Username": "アカウントを入力してください",
+  "k_Main_Label_Password": "パスワード",
+  "k_Main_Placeholder_Password": "パスワードを入力してください",
+  "k_Main_Button_Login": "ログイン"
+}

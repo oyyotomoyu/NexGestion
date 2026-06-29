@@ -1,0 +1,72 @@
+.nex-select {
+  position: relative;
+  min-width: 150px;
+}
+
+.nex-select__trigger,
+.nex-select__option {
+  width: 100%;
+  border: 0;
+  background: var(--color-surface);
+  color: var(--color-secondary);
+  font: inherit;
+  cursor: pointer;
+}
+
+.nex-select__trigger {
+  display: flex;
+  min-height: 42px;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 9px 12px;
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+}
+
+.nex-select__trigger:hover,
+.nex-select__trigger:focus-visible {
+  border-color: var(--color-primary);
+}
+
+.nex-select__trigger:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 4px var(--color-focus-ring);
+}
+
+.nex-select__chevron {
+  width: 7px;
+  height: 7px;
+  margin-top: -4px;
+  border-right: 2px solid var(--color-secondary);
+  border-bottom: 2px solid var(--color-secondary);
+  transform: rotate(45deg);
+}
+
+.nex-select__menu {
+  position: absolute;
+  z-index: 10;
+  top: calc(100% + 6px);
+  right: 0;
+  width: 100%;
+  padding: 5px;
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+  background: var(--color-surface);
+  box-shadow: 0 12px 28px var(--color-shadow);
+}
+
+.nex-select__option {
+  display: block;
+  padding: 9px 10px;
+  border-radius: 6px;
+  text-align: left;
+}
+
+.nex-select__option:hover,
+.nex-select__option:focus-visible,
+.nex-select__option.active {
+  background: var(--color-primary-soft);
+  color: var(--color-primary);
+  outline: none;
+}

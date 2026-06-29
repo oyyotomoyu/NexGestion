@@ -182,6 +182,31 @@ Guidelines:
 - Views and layouts are architectural containers rather than shared UI components;
   they retain role-based names such as `Dashboard` and `AppLayout`.
 
+### NexText
+
+All user-visible text must be rendered through `NexText`. Views and components must
+not render text directly with `h1`-`h6`, `p`, or `span`. Structural controls such as
+`NexButton` and `NexInput` are responsible for using `NexText` internally.
+
+`NexText` controls:
+
+- Semantic HTML through `as` and predefined typography through `variant`
+- Font size, weight, family, line height, alignment, and truncation
+- Semantic NexColor tokens such as `color="heading"` or `color="muted"`
+- Explicit color strings such as `color="#175cd3"` when a one-off value is required
+
+Literal colors remain forbidden in CSS. The explicit-color exception is available
+only through the `NexText` `color` property. Prefer NexColor semantic names whenever
+the color has a reusable UI meaning.
+
+```tsx
+<NexText variant="title">Page title</NexText>
+<NexText color="muted">Supporting content</NexText>
+<NexText as="span" size={13} weight={600} color="#175cd3">
+  Custom text
+</NexText>
+```
+
 ## 8. Requests
 
 `src/requests` should follow xinsight's dedicated API module approach.
@@ -214,29 +239,39 @@ Guidelines:
 
 `src/locales` should follow xinsight's i18n direction with translation keys grouped by domain.
 
-Recommended structure:
+Implemented structure:
 
 ```txt
 src/locales/
 ├── i18n.ts
+├── languages.ts             # Shared supported-language list and metadata
 └── key/
-    ├── Global.ts
-    ├── Component.ts
-    ├── Auth.ts
-    ├── Dashboard.ts
-    ├── Customers.ts
-    ├── Products.ts
-    ├── Sales.ts
-    ├── Invoices.ts
-    └── Settings.ts
+    ├── Global/
+    │   ├── index.ts
+    │   ├── CHT.json
+    │   ├── ENG.json
+    │   └── JPN.json
+    └── Login/
+        ├── index.ts
+        ├── CHT.json
+        ├── ENG.json
+        └── JPN.json
 ```
 
 Initial language direction:
 
-- Start with English keys and Traditional Chinese support if needed.
+- The shared language list lives in `locales/languages.ts`; pages must not define
+  their own language lists.
+- English (`ENG`), Traditional Chinese (`CHT`), and Japanese (`JPN`) are supported;
+  English is the default when the user has no saved preference.
+- Language selector options are the deliberate translation exception. Keep their
+  native names wrapped in `noI18n()`: `English`, `正體中文`, and `日本語`.
 - Keep shared terms in `Global` or `Component`.
 - Keep business module copy in module-specific files.
-- Avoid hard-coded UI strings in views and components once i18n is introduced.
+- All user-visible strings, placeholders, accessibility labels, and document titles
+  must use translation keys. Hard-coded UI copy is forbidden in views and components.
+- Page-specific keys use `module.k_...`, for example
+  `login.k_Main_Title_WelcomeBack`.
 
 ## 10. Store
 
@@ -315,6 +350,8 @@ Guidelines:
 ## 13. Assets
 
 `src/assets` should contain static files used by the React app.
+ODM-customizable branding images, including the login logo, must live in
+`odm/img` and be imported through the `@odm/img/...` alias.
 
 Recommended structure:
 
@@ -323,6 +360,11 @@ src/assets/
 ├── icons/
 ├── images/
 └── fonts/
+
+odm/img/
+├── favicon.ico
+├── language-icon.svg
+└── login-logo.svg
 ```
 
 Guidelines:
@@ -330,6 +372,20 @@ Guidelines:
 - Use SVG for icons when possible.
 - Keep product or brand assets separated from generic UI assets.
 - Avoid storing generated or temporary files here.
+
+ODM image requirements:
+
+| File | Required size | Required format | Usage |
+| --- | --- | --- | --- |
+| `login-logo.svg` | `240 × 56` viewBox | SVG | Login card logo; keep the icon in the leftmost `56 × 56` area |
+| `language-icon.svg` | `24 × 24` viewBox | SVG | Globe icon displayed before the language selector |
+| `favicon.ico` | `32 × 32` | ICO | Browser tab icon derived from the square logo mark |
+
+ODM customization must preserve these filenames, dimensions, and formats so the
+client can replace assets without code changes. The favicon must use only the square
+logo mark; do not compress the full horizontal login logo into the ICO canvas.
+`main.tsx` must import the favicon through `@odm/img/favicon.ico?url`; aliases are not
+valid browser URLs when written directly in `index.html`.
 
 ## 14. First Implementation Plan
 

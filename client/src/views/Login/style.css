@@ -1,0 +1,76 @@
+.login-page {
+  position: relative;
+  display: grid;
+  min-height: 100vh;
+  padding: 32px;
+  place-items: center;
+  overflow: hidden;
+  background: radial-gradient(
+    circle at top right,
+    var(--color-primary-soft),
+    var(--color-background) 46%
+  );
+}
+
+.login-page__tools {
+  position: absolute;
+  top: 20px;
+  right: 24px;
+}
+
+.login-page__language {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.login-page__language-icon {
+  width: 24px;
+  height: 24px;
+}
+
+.login-card {
+  z-index: 1;
+  width: min(100%, 360px);
+  padding: 36px 32px 32px;
+  border: 1px solid var(--color-border);
+  border-radius: 14px;
+  background: var(--color-surface);
+  box-shadow: 0 18px 48px var(--color-shadow);
+}
+
+.login-card__logo {
+  display: block;
+  width: 210px;
+  max-width: 100%;
+  height: auto;
+  margin: 0 auto 28px;
+}
+
+.login-card__heading {
+  margin-bottom: 28px;
+  text-align: center;
+}
+
+.login-card__title {
+  margin-bottom: 8px;
+}
+
+.login-form {
+  display: grid;
+  gap: 18px;
+}
+
+.login-form .nex-button {
+  margin-top: 4px;
+}
+
+@media (max-width: 520px) {
+  .login-page {
+    padding: 80px 20px 24px;
+  }
+
+  .login-card {
+    padding: 30px 24px 26px;
+  }
+}

@@ -18,6 +18,8 @@ export interface NexColors {
   surface: string;
   surfaceMuted: string;
   border: string;
+  focusRing: string;
+  shadow: string;
   success: string;
   warning: string;
   danger: string;
@@ -41,6 +43,10 @@ const NexColorContext = createContext<NexColorTheme>(defaultTheme);
 
 function toCssVariableName(token: string) {
   return token.replace(/[A-Z]/g, (letter) => `-${letter.toLowerCase()}`);
+}
+
+export function getNexColorVariable(token: keyof NexColors) {
+  return `var(--color-${toCssVariableName(token)})`;
 }
 
 function createColorVariables(colors: NexColors): NexColorVariables {

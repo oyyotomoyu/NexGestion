@@ -1,8 +1,10 @@
+import { NexText } from "@/components/NexText";
+
 export default function Dashboard() {
   return (
     <section>
-      <h1>Dashboard</h1>
-      <p>NexGestion client is ready for React development.</p>
+      <NexText variant="title">Dashboard</NexText>
+      <NexText>NexGestion client is ready for React development.</NexText>
     </section>
   );
 }
