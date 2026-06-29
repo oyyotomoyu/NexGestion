@@ -5,7 +5,8 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "tsc --noEmit && vite build",
+    "build": "pnpm check:css-colors && tsc --noEmit && vite build",
+    "check:css-colors": "node scripts/check-css-colors.mjs",
     "preview": "vite preview",
     "typecheck": "tsc --noEmit"
   },

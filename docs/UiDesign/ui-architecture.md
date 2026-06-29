@@ -277,21 +277,34 @@ Guidelines:
 
 ## 12. Theme
 
-`src/theme` should contain global styles and design tokens.
+UI color is controlled by `ThemeProvider`. The default theme configuration lives in
+the repository-level `odm/theme.json` so an ODM build can replace it without changing
+component or stylesheet code. `src/theme` contains only shared styles that consume
+the provider's semantic CSS variables.
 
-Recommended structure:
+Structure:
 
 ```txt
-src/theme/
-├── global.scss
-├── variable.scss
-└── tokens.ts
+odm/
+└── theme.json                         # Customizable color values
+
+client/src/
+├── components/ThemeProvider/index.tsx # Validates/exposes tokens and CSS variables
+└── theme/global.css                   # Consumes semantic theme variables
 ```
 
 Guidelines:
 
-- Keep colors, spacing, typography, and shared layout values centralized.
-- Avoid scattering hard-coded colors across views.
+- All UI colors must be defined in `odm/theme.json` and exposed by `ThemeProvider`.
+- CSS must use semantic variables such as `var(--color-primary)`,
+  `var(--color-heading)`, and `var(--color-background)`.
+- Literal and named color values are forbidden in CSS. Color-bearing properties
+  must use `--color-*`; the `check:css-colors` build check enforces this rule.
+- Add a semantic token instead of referencing palette values directly from a view.
+- React code that needs a color outside CSS (for example, a chart or canvas) must use
+  `useTheme()` rather than importing the JSON directly.
+- The initial tokens cover primary, secondary, text, heading, content, muted,
+  backgrounds, surfaces, border, and status colors.
 - Keep theme naming business-neutral.
 
 ## 13. Assets

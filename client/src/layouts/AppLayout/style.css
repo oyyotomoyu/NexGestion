@@ -2,14 +2,14 @@
   min-height: 100vh;
   display: grid;
   grid-template-columns: 240px minmax(0, 1fr);
-  background: #f5f7fb;
-  color: #182230;
+  background: var(--color-background);
+  color: var(--color-text);
 }
 
 .app-sidebar {
   padding: 24px 18px;
-  background: #ffffff;
-  border-right: 1px solid #e5e7eb;
+  background: var(--color-surface);
+  border-right: 1px solid var(--color-border);
 }
 
 .app-brand {
@@ -26,13 +26,13 @@
 .app-nav a {
   padding: 10px 12px;
   border-radius: 8px;
-  color: #475467;
+  color: var(--color-secondary);
   text-decoration: none;
 }
 
 .app-nav a.active {
-  background: #e8f0ff;
-  color: #175cd3;
+  background: var(--color-primary-soft);
+  color: var(--color-primary);
 }
 
 .app-main {
@@ -46,6 +46,6 @@
 
   .app-sidebar {
     border-right: 0;
-    border-bottom: 1px solid #e5e7eb;
+    border-bottom: 1px solid var(--color-border);
   }
 }

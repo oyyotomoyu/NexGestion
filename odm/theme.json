@@ -1,0 +1,24 @@
+{
+  "name": "nexgestion-default",
+  "colors": {
+    "primary": "#175cd3",
+    "primaryHover": "#1849a9",
+    "primarySoft": "#e8f0ff",
+    "secondary": "#475467",
+    "secondaryHover": "#344054",
+    "secondarySoft": "#f2f4f7",
+    "text": "#182230",
+    "heading": "#101828",
+    "content": "#344054",
+    "muted": "#667085",
+    "onPrimary": "#ffffff",
+    "background": "#f5f7fb",
+    "surface": "#ffffff",
+    "surfaceMuted": "#f2f4f7",
+    "border": "#e5e7eb",
+    "success": "#067647",
+    "warning": "#b54708",
+    "danger": "#b42318",
+    "info": "#175cd3"
+  }
+}

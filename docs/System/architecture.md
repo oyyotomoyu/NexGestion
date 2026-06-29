@@ -44,7 +44,7 @@ NexGestion/
 ├── docs/                # Product and technical documentation
 │   └── System/          # System architecture and technical decisions
 ├── installer/           # Platform-specific installer planning
-├── odm/                 # Object/document mapping or data model planning
+├── odm/                 # ODM-specific customizable assets, including theme.json
 └── script/              # Project-level scripts
 ```
 
