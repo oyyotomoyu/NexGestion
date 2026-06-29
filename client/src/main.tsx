@@ -3,15 +3,15 @@ import ReactDOM from "react-dom/client";
 import { HashRouter } from "react-router-dom";
 
 import App from "@/views";
-import { ThemeProvider } from "@/components/ThemeProvider";
+import { NexColor } from "@/components/NexColor";
 import "@/theme/global.css";
 
 ReactDOM.createRoot(document.getElementById("root") as HTMLElement).render(
   <React.StrictMode>
-    <ThemeProvider>
+    <NexColor>
       <HashRouter>
         <App />
       </HashRouter>
-    </ThemeProvider>
+    </NexColor>
   </React.StrictMode>
 );

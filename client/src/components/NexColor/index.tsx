@@ -2,7 +2,7 @@ import { createContext, useContext, type CSSProperties, type ReactNode } from "r
 
 import defaultThemeJson from "@odm/theme.json";
 
-export interface ThemeColors {
+export interface NexColors {
   primary: string;
   primaryHover: string;
   primarySoft: string;
@@ -24,48 +24,48 @@ export interface ThemeColors {
   info: string;
 }
 
-export interface ThemeConfig {
+export interface NexColorTheme {
   name: string;
-  colors: ThemeColors;
+  colors: NexColors;
 }
 
-interface ThemeProviderProps {
+interface NexColorProps {
   children: ReactNode;
-  theme?: ThemeConfig;
+  theme?: NexColorTheme;
 }
 
-type ThemeVariables = CSSProperties & Record<`--color-${string}`, string>;
+type NexColorVariables = CSSProperties & Record<`--color-${string}`, string>;
 
-const defaultTheme = defaultThemeJson satisfies ThemeConfig;
-const ThemeContext = createContext<ThemeConfig>(defaultTheme);
+const defaultTheme = defaultThemeJson satisfies NexColorTheme;
+const NexColorContext = createContext<NexColorTheme>(defaultTheme);
 
 function toCssVariableName(token: string) {
   return token.replace(/[A-Z]/g, (letter) => `-${letter.toLowerCase()}`);
 }
 
-function createThemeVariables(colors: ThemeColors): ThemeVariables {
+function createColorVariables(colors: NexColors): NexColorVariables {
   return Object.fromEntries(
     Object.entries(colors).map(([token, value]) => [
       `--color-${toCssVariableName(token)}`,
       value,
     ]),
-  ) as ThemeVariables;
+  ) as NexColorVariables;
 }
 
-export function ThemeProvider({ children, theme = defaultTheme }: ThemeProviderProps) {
+export function NexColor({ children, theme = defaultTheme }: NexColorProps) {
   return (
-    <ThemeContext.Provider value={theme}>
+    <NexColorContext.Provider value={theme}>
       <div
         className="theme-root"
         data-theme={theme.name}
-        style={createThemeVariables(theme.colors)}
+        style={createColorVariables(theme.colors)}
       >
         {children}
       </div>
-    </ThemeContext.Provider>
+    </NexColorContext.Provider>
   );
 }
 
-export function useTheme() {
-  return useContext(ThemeContext);
+export function useNexColor() {
+  return useContext(NexColorContext);
 }

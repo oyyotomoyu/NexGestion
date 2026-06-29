@@ -73,7 +73,7 @@ NexGestion should follow the same provider layering idea as xinsight:
 ```txt
 main.tsx
 └── React.StrictMode
-    └── ThemeProvider
+    └── NexColor
         └── Redux Provider
             └── Router
                 └── App
@@ -164,9 +164,9 @@ Recommended categories:
 
 ```txt
 src/components/
-├── base/        # Button, Input, Select, Modal, Table wrappers
-├── feedback/    # Loading, EmptyState, ErrorMessage, ConfirmDialog
-├── business/    # CustomerPicker, MoneyText, StatusTag
+├── base/        # NexButton, NexInput, NexSelect, NexModal, NexTable
+├── feedback/    # NexLoading, NexEmptyState, NexErrorMessage, NexConfirmDialog
+├── business/    # NexCustomerPicker, NexMoneyText, NexStatusTag
 └── templates/   # Reusable page or form templates
 ```
 
@@ -175,7 +175,12 @@ Guidelines:
 - `base` components should stay domain-neutral.
 - `business` components may know NexGestion business concepts.
 - Avoid placing page-only components here too early.
-- Component names should be clear and consistent, such as `CustomerPicker`, `EmptyState`, `PageHeader`.
+- All shared UI component names and folders must use the `Nex` prefix, such as
+  `NexColor`, `NexText`, `NexButton`, `NexCustomerPicker`, and `NexEmptyState`.
+- Hooks owned by a Nex component follow the `useNex...` convention, such as
+  `useNexColor()`.
+- Views and layouts are architectural containers rather than shared UI components;
+  they retain role-based names such as `Dashboard` and `AppLayout`.
 
 ## 8. Requests
 
@@ -277,7 +282,7 @@ Guidelines:
 
 ## 12. Theme
 
-UI color is controlled by `ThemeProvider`. The default theme configuration lives in
+UI color is controlled by `NexColor`. The default theme configuration lives in
 the repository-level `odm/theme.json` so an ODM build can replace it without changing
 component or stylesheet code. `src/theme` contains only shared styles that consume
 the provider's semantic CSS variables.
@@ -289,20 +294,20 @@ odm/
 └── theme.json                         # Customizable color values
 
 client/src/
-├── components/ThemeProvider/index.tsx # Validates/exposes tokens and CSS variables
+├── components/NexColor/index.tsx      # Validates/exposes tokens and CSS variables
 └── theme/global.css                   # Consumes semantic theme variables
 ```
 
 Guidelines:
 
-- All UI colors must be defined in `odm/theme.json` and exposed by `ThemeProvider`.
+- All UI colors must be defined in `odm/theme.json` and exposed by `NexColor`.
 - CSS must use semantic variables such as `var(--color-primary)`,
   `var(--color-heading)`, and `var(--color-background)`.
 - Literal and named color values are forbidden in CSS. Color-bearing properties
   must use `--color-*`; the `check:css-colors` build check enforces this rule.
 - Add a semantic token instead of referencing palette values directly from a view.
 - React code that needs a color outside CSS (for example, a chart or canvas) must use
-  `useTheme()` rather than importing the JSON directly.
+  `useNexColor()` rather than importing the JSON directly.
 - The initial tokens cover primary, secondary, text, heading, content, muted,
   backgrounds, surfaces, border, and status colors.
 - Keep theme naming business-neutral.
