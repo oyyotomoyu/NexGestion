@@ -98,6 +98,10 @@ Planned backend structure:
 - `server/system`: Core services, domain logic, permission checks, and business workflows
 - `server/tools`: Internal backend utilities, generators, maintenance helpers, or development tools
 
+Core system services:
+
+- `UserSystem`: Owns user identity, email-based authentication, authorization, employee identity, roles, and groups for one organization
+
 Initial backend decisions still pending:
 
 - HTTP framework or router
@@ -143,6 +147,14 @@ Possible directions:
 - Export and backup support as a first-class design concern
 - Future synchronization support if multi-device workflows become part of the scope
 
+Initial database ownership decision:
+
+- `system.db`: Core application settings and system metadata
+- `user.db`: All UserSystem data, including users, employee profiles, roles, permissions, and groups
+- Business modules must reference UserSystem records by immutable identifiers instead of duplicating user data
+
+The proposed UserSystem model is documented in [`user-system.md`](./user-system.md).
+
 Pending decisions:
 
 - Database choice
@@ -173,6 +185,8 @@ Each module should be planned with:
 ## 9. Local-First Considerations
 
 Local-first behavior should be considered from the beginning, even if the first implementation is simple.
+
+The initial deployment model is a Go server running on a laptop or local server. Employee devices join the same Wi-Fi or LAN and open the host machine's LAN IP address. The server must listen on an appropriate network interface such as `0.0.0.0`; `127.0.0.0/8` addresses are loopback addresses and are not reachable from other employee devices.
 
 Important questions:
 

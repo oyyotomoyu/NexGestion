@@ -16,9 +16,10 @@ const defaultDatabaseDirectory = "database"
 // DatabaseSpec describes a database required by the application.
 // Seed statements are executed only when the database file is first created.
 type DatabaseSpec struct {
-	Name   string
-	Schema []string
-	Seed   []string
+	Name     string
+	Schema   []string
+	Seed     []string
+	SeedFunc func(context.Context, *sql.Tx) error
 }
 
 // RequiredDatabases is the list of SQLite databases needed by NexGestion.
@@ -36,6 +37,7 @@ var RequiredDatabases = []DatabaseSpec{
 			`INSERT INTO system_settings (key, value) VALUES ('language', 'CHT')`,
 		},
 	},
+	userDatabaseSpec(),
 }
 
 // EnsureRequiredDatabases creates and initializes every required database.
@@ -83,6 +85,9 @@ func ensureDatabase(ctx context.Context, directory string, spec DatabaseSpec) er
 	if err := db.PingContext(ctx); err != nil {
 		return fmt.Errorf("connect to database: %w", err)
 	}
+	if _, err := db.ExecContext(ctx, `PRAGMA foreign_keys = ON`); err != nil {
+		return fmt.Errorf("enable foreign keys: %w", err)
+	}
 
 	tx, err := db.BeginTx(ctx, nil)
 	if err != nil {
@@ -100,6 +105,11 @@ func ensureDatabase(ctx context.Context, directory string, spec DatabaseSpec) er
 		for _, statement := range spec.Seed {
 			if _, err := tx.ExecContext(ctx, statement); err != nil {
 				return fmt.Errorf("insert default data: %w", err)
+			}
+		}
+		if spec.SeedFunc != nil {
+			if err := spec.SeedFunc(ctx, tx); err != nil {
+				return fmt.Errorf("insert generated default data: %w", err)
 			}
 		}
 	}
