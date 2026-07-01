@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"log"
@@ -10,11 +11,17 @@ import (
 	"path/filepath"
 	"strings"
 	"time"
+
+	"nexgestion/server/system"
 )
 
 const defaultAddress = ":8080"
 
 func main() {
+	if err := system.EnsureRequiredDatabases(context.Background(), getDatabaseDirectory()); err != nil {
+		log.Fatalf("database initialization failed: %v", err)
+	}
+
 	address := getAddress()
 	distDir, err := findClientDist()
 	if err != nil {
@@ -37,6 +44,15 @@ func main() {
 	if err := server.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
 		log.Fatalf("server failed: %v", err)
 	}
+}
+
+func getDatabaseDirectory() string {
+	directory := strings.TrimSpace(os.Getenv("DATABASE_DIR"))
+	if directory == "" {
+		return "database"
+	}
+
+	return directory
 }
 
 func getAddress() string {
