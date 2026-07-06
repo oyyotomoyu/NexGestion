@@ -2,7 +2,6 @@ package main
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"log"
 	"net/http"
@@ -12,13 +11,15 @@ import (
 	"strings"
 	"time"
 
+	"nexgestion/server/apis"
 	"nexgestion/server/system"
 )
 
 const defaultAddress = ":8080"
 
 func main() {
-	if err := system.EnsureRequiredDatabases(context.Background(), getDatabaseDirectory()); err != nil {
+	databaseDirectory := getDatabaseDirectory()
+	if err := system.EnsureRequiredDatabases(context.Background(), databaseDirectory); err != nil {
 		log.Fatalf("database initialization failed: %v", err)
 	}
 
@@ -29,7 +30,8 @@ func main() {
 	}
 
 	mux := http.NewServeMux()
-	mux.HandleFunc("/api/health", healthHandler)
+	users := system.NewUserService(databaseDirectory)
+	apis.InitRouter(mux, users, system.NewAuthService(users))
 	mux.Handle("/", spaHandler(distDir))
 
 	server := &http.Server{
@@ -89,17 +91,6 @@ func findClientDist() (string, error) {
 	return "", errors.New("expected client/dist/index.html; run `pnpm build` in client first")
 }
 
-func healthHandler(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodGet {
-		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
-		return
-	}
-
-	writeJSON(w, http.StatusOK, map[string]string{
-		"status": "ok",
-	})
-}
-
 func spaHandler(distDir string) http.HandlerFunc {
 	fileServer := http.FileServer(http.Dir(distDir))
 
@@ -126,15 +117,6 @@ func spaHandler(distDir string) http.HandlerFunc {
 		}
 
 		http.ServeFile(w, r, filepath.Join(distDir, "index.html"))
-	}
-}
-
-func writeJSON(w http.ResponseWriter, statusCode int, value any) {
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(statusCode)
-
-	if err := json.NewEncoder(w).Encode(value); err != nil {
-		log.Printf("write json failed: %v", err)
 	}
 }
 

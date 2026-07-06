@@ -1,5 +1,7 @@
 # UserSystem Design
 
+Authentication and session behavior is defined in [`login.md`](./login.md).
+
 ## 1. Purpose
 
 UserSystem owns user identity, authentication, authorization, and organization membership in NexGestion.
