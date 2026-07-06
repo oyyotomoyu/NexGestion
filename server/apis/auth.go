@@ -8,6 +8,7 @@ import (
 	"os"
 	"strings"
 
+	applogs "nexgestion/server/logs"
 	"nexgestion/server/system"
 )
 
@@ -15,7 +16,7 @@ const refreshCookieName = "nexgestion_refresh_token"
 
 type authContextKey struct{}
 
-func login(auth *system.AuthService) http.HandlerFunc {
+func login(auth *system.AuthService, logService *applogs.Service) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		var input struct {
 			Email    string `json:"email"`
@@ -27,27 +28,32 @@ func login(auth *system.AuthService) http.HandlerFunc {
 		}
 		tokens, err := auth.Login(r.Context(), input.Email, input.Password, clientIP(r), r.UserAgent())
 		if err != nil {
+			_ = logService.With(clientIP(r), "").Log("warning", "login failed")
 			writeAuthError(w, err)
 			return
 		}
+		_ = logService.With(clientIP(r), tokens.UserID).Log("info", "login succeeded")
 		setRefreshCookie(w, r, tokens.RefreshToken, int(system.RefreshTokenLifetime.Seconds()))
 		writeTokenResponse(w, tokens)
 	}
 }
 
-func refresh(auth *system.AuthService) http.HandlerFunc {
+func refresh(auth *system.AuthService, logService *applogs.Service) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		cookie, err := r.Cookie(refreshCookieName)
 		if err != nil {
+			_ = logService.With(clientIP(r), "").Log("warning", "token refresh failed")
 			writeAuthError(w, system.ErrInvalidToken)
 			return
 		}
 		tokens, err := auth.Refresh(r.Context(), cookie.Value, clientIP(r), r.UserAgent())
 		if err != nil {
+			_ = logService.With(clientIP(r), "").Log("warning", "token refresh failed")
 			clearRefreshCookie(w)
 			writeAuthError(w, err)
 			return
 		}
+		_ = logService.With(clientIP(r), tokens.UserID).Log("info", "token refreshed")
 		setRefreshCookie(w, r, tokens.RefreshToken, int(system.RefreshTokenLifetime.Seconds()))
 		writeTokenResponse(w, tokens)
 	}
@@ -58,8 +64,21 @@ func logout(auth *system.AuthService) http.HandlerFunc {
 		if cookie, err := r.Cookie(refreshCookieName); err == nil {
 			_ = auth.Logout(r.Context(), cookie.Value)
 		}
+		recordRequestLog(r, "info", "logged out")
 		clearRefreshCookie(w)
 		w.WriteHeader(http.StatusNoContent)
+	}
+}
+
+func withRequestLogger(service *applogs.Service, next http.HandlerFunc) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		claims, _ := r.Context().Value(authContextKey{}).(*system.AccessClaims)
+		userID := ""
+		if claims != nil {
+			userID = claims.Subject
+		}
+		ctx := applogs.IntoContext(r.Context(), service.With(clientIP(r), userID))
+		next(w, r.WithContext(ctx))
 	}
 }
 

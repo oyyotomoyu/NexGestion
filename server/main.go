@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"nexgestion/server/apis"
+	applogs "nexgestion/server/logs"
 	"nexgestion/server/system"
 )
 
@@ -22,6 +23,18 @@ func main() {
 	if err := system.EnsureRequiredDatabases(context.Background(), databaseDirectory); err != nil {
 		log.Fatalf("database initialization failed: %v", err)
 	}
+	location, err := time.LoadLocation("Asia/Taipei")
+	if err != nil {
+		log.Fatalf("load log timezone failed: %v", err)
+	}
+	logService, err := applogs.NewService(getLogDirectory(), location)
+	if err != nil {
+		log.Fatalf("log initialization failed: %v", err)
+	}
+	defer logService.Close()
+	if err := logService.Log("info", "server started"); err != nil {
+		log.Printf("write startup log failed: %v", err)
+	}
 
 	address := getAddress()
 	distDir, err := findClientDist()
@@ -31,7 +44,7 @@ func main() {
 
 	mux := http.NewServeMux()
 	users := system.NewUserService(databaseDirectory)
-	apis.InitRouter(mux, users, system.NewAuthService(users))
+	apis.InitRouter(mux, users, system.NewAuthService(users), logService)
 	mux.Handle("/", spaHandler(distDir))
 
 	server := &http.Server{
@@ -46,6 +59,18 @@ func main() {
 	if err := server.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
 		log.Fatalf("server failed: %v", err)
 	}
+}
+
+func getLogDirectory() string {
+	directory := strings.TrimSpace(os.Getenv("LOG_DIR"))
+	if directory == "" {
+		workingDirectory, err := os.Getwd()
+		if err == nil && filepath.Base(workingDirectory) == "server" {
+			return filepath.Join("..", "log")
+		}
+		return "log"
+	}
+	return directory
 }
 
 func getDatabaseDirectory() string {

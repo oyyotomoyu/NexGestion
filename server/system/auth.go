@@ -40,6 +40,7 @@ type AuthTokens struct {
 	AccessToken  string
 	RefreshToken string
 	ExpiresIn    int64
+	UserID       string
 }
 
 type AuthService struct{ users *UserService }
@@ -190,7 +191,7 @@ func (s *AuthService) issueTokens(ctx context.Context, db *sql.DB, userID, ipAdd
 	if err != nil {
 		return nil, fmt.Errorf("create session: %w", err)
 	}
-	return &AuthTokens{AccessToken: accessToken, RefreshToken: refreshToken, ExpiresIn: int64(AccessTokenLifetime.Seconds())}, nil
+	return &AuthTokens{AccessToken: accessToken, RefreshToken: refreshToken, ExpiresIn: int64(AccessTokenLifetime.Seconds()), UserID: userID}, nil
 }
 
 func (s *AuthService) jwtSecret(ctx context.Context) ([]byte, error) {

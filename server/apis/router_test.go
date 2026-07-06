@@ -7,7 +7,9 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
+	"time"
 
+	applogs "nexgestion/server/logs"
 	"nexgestion/server/system"
 )
 
@@ -20,7 +22,12 @@ func testRouter(t *testing.T) *http.ServeMux {
 	}
 	router := http.NewServeMux()
 	users := system.NewUserService(directory)
-	InitRouter(router, users, system.NewAuthService(users))
+	logService, err := applogs.NewService(t.TempDir(), time.UTC)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(logService.Close)
+	InitRouter(router, users, system.NewAuthService(users), logService)
 	return router
 }
 
@@ -156,6 +163,25 @@ func TestLoginRefreshMeAndLogout(t *testing.T) {
 	router.ServeHTTP(logoutResponse, logoutRequest)
 	if logoutResponse.Code != http.StatusNoContent {
 		t.Fatalf("logout: expected %d, got %d", http.StatusNoContent, logoutResponse.Code)
+	}
+}
+
+func TestReadLogsAPI(t *testing.T) {
+	router := testRouter(t)
+	accessToken, _ := loginForTest(t, router)
+	response := serveAuthorized(router, http.MethodGet, "/api/logs?status=info&limit=10", nil, accessToken)
+	if response.Code != http.StatusOK {
+		t.Fatalf("logs: expected %d, got %d: %s", http.StatusOK, response.Code, response.Body.String())
+	}
+	var result applogs.QueryResult
+	if err := json.NewDecoder(response.Body).Decode(&result); err != nil {
+		t.Fatal(err)
+	}
+	if len(result.Logs) == 0 {
+		t.Fatal("expected login log")
+	}
+	if result.Logs[0].UserID == "" || result.Logs[0].Content != "login succeeded" {
+		t.Fatalf("unexpected log: %+v", result.Logs[0])
 	}
 }
 

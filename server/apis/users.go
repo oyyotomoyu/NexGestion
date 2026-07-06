@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"strings"
 
+	applogs "nexgestion/server/logs"
 	"nexgestion/server/system"
 )
 
@@ -47,6 +48,7 @@ func createUser(users *system.UserService) http.HandlerFunc {
 			return
 		}
 		w.Header().Set("Location", "/api/users/"+result.ID)
+		recordRequestLog(r, "info", "created user "+result.ID)
 		writeJSON(w, http.StatusCreated, result)
 	}
 }
@@ -63,6 +65,7 @@ func updateUser(users *system.UserService) http.HandlerFunc {
 			writeSystemError(w, err)
 			return
 		}
+		recordRequestLog(r, "info", "updated user "+result.ID)
 		writeJSON(w, http.StatusOK, result)
 	}
 }
@@ -73,7 +76,14 @@ func deleteUser(users *system.UserService) http.HandlerFunc {
 			writeSystemError(w, err)
 			return
 		}
+		recordRequestLog(r, "info", "deleted user "+r.PathValue("id"))
 		w.WriteHeader(http.StatusNoContent)
+	}
+}
+
+func recordRequestLog(r *http.Request, status, content string) {
+	if logger := applogs.FromContext(r.Context()); logger != nil {
+		_ = logger.Log(status, content)
 	}
 }
 
