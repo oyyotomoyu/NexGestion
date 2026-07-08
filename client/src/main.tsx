@@ -2,6 +2,7 @@ import React from "react";
 import ReactDOM from "react-dom/client";
 import { HashRouter } from "react-router-dom";
 
+import { AuthProvider } from "@/auth/AuthProvider";
 import App from "@/views";
 import { NexColor } from "@/components/NexColor";
 import faviconUrl from "@odm/img/favicon.ico?url";
@@ -19,7 +20,9 @@ ReactDOM.createRoot(document.getElementById("root") as HTMLElement).render(
   <React.StrictMode>
     <NexColor>
       <HashRouter>
-        <App />
+        <AuthProvider>
+          <App />
+        </AuthProvider>
       </HashRouter>
     </NexColor>
   </React.StrictMode>

@@ -1,3 +1,12 @@
 {
-  "k_Language_Select": "Select language"
+  "k_App_Brand": "NexGestion",
+  "k_Language_Select": "Select language",
+  "k_Nav_Dashboard": "Dashboard",
+  "k_Nav_Settings": "Settings",
+  "k_Dashboard_PageTitle": "Dashboard",
+  "k_Dashboard_Title": "Dashboard",
+  "k_Dashboard_Content_Ready": "NexGestion client is ready for React development.",
+  "k_Settings_PageTitle": "Settings",
+  "k_Settings_Title": "Settings",
+  "k_Settings_Content_Planned": "Application settings will be planned here."
 }

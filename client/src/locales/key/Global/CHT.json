@@ -1,3 +1,12 @@
 {
-  "k_Language_Select": "選擇語言"
+  "k_App_Brand": "NexGestion",
+  "k_Language_Select": "選擇語言",
+  "k_Nav_Dashboard": "儀表板",
+  "k_Nav_Settings": "設定",
+  "k_Dashboard_PageTitle": "儀表板",
+  "k_Dashboard_Title": "儀表板",
+  "k_Dashboard_Content_Ready": "NexGestion 用戶端已準備好進行 React 開發。",
+  "k_Settings_PageTitle": "設定",
+  "k_Settings_Title": "設定",
+  "k_Settings_Content_Planned": "應用程式設定將在此規劃。"
 }

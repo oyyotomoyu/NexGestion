@@ -1,5 +1,6 @@
 import { Navigate, RouteObject, useRoutes } from "react-router-dom";
 
+import { ProtectedRoute } from "@/auth/ProtectedRoute";
 import AppLayout from "@/layouts/AppLayout";
 import Dashboard from "@/views/Dashboard";
 import Login from "@/views/Login";
@@ -12,11 +13,15 @@ const routes: RouteObject[] = [
   },
   {
     path: "/",
-    element: <AppLayout />,
+    element: (
+      <ProtectedRoute>
+        <AppLayout />
+      </ProtectedRoute>
+    ),
     children: [
       {
         index: true,
-        element: <Navigate to="/login" replace />,
+        element: <Navigate to="/dashboard" replace />,
       },
       {
         path: "dashboard",

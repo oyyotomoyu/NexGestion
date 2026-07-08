@@ -5,5 +5,5 @@ export interface HealthResponse {
 }
 
 export function getHealth() {
-  return request<HealthResponse>("/api/health");
+  return request<HealthResponse>("/api/health", {}, { auth: false });
 }

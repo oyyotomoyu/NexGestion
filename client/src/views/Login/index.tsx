@@ -1,7 +1,8 @@
-import type { FormEvent } from "react";
+import { useState, type FormEvent } from "react";
 import { useTranslation } from "react-i18next";
-import { useNavigate } from "react-router-dom";
+import { Navigate, useNavigate } from "react-router-dom";
 
+import { useAuth } from "@/auth/AuthProvider";
 import { NexButton } from "@/components/NexButton";
 import { NexInput } from "@/components/NexInput";
 import { NexSelect } from "@/components/NexSelect";
@@ -20,14 +21,34 @@ import "./style.css";
 
 export default function Login() {
   const navigate = useNavigate();
+  const { isAuthenticated, signIn } = useAuth();
   const { i18n, t } = useTranslation("ui");
   useDocumentTitle(t("login.k_Main_PageTitle"));
   const currentLanguage = i18n.resolvedLanguage ?? null;
   const selectedLanguage = isAppLanguage(currentLanguage) ? currentLanguage : defaultLanguage;
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [loginError, setLoginError] = useState("");
 
-  function handleSubmit(event: FormEvent<HTMLFormElement>) {
+  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    navigate("/dashboard");
+    setIsSubmitting(true);
+    setLoginError("");
+    const form = new FormData(event.currentTarget);
+    try {
+      await signIn({
+        email: String(form.get("email") ?? ""),
+        password: String(form.get("password") ?? ""),
+      });
+      navigate("/dashboard");
+    } catch (error) {
+      setLoginError(error instanceof Error ? error.message : "Login failed");
+    } finally {
+      setIsSubmitting(false);
+    }
+  }
+
+  if (isAuthenticated) {
+    return <Navigate to="/dashboard" replace />;
   }
 
   return (
@@ -69,8 +90,9 @@ export default function Login() {
 
         <form className="login-form" onSubmit={handleSubmit}>
           <NexInput
-            id="username"
-            name="username"
+            id="email"
+            name="email"
+            type="email"
             label={t("login.k_Main_Label_Username")}
             placeholder={t("login.k_Main_Placeholder_Username")}
             autoComplete="username"
@@ -86,7 +108,12 @@ export default function Login() {
             autoComplete="current-password"
             required
           />
-          <NexButton type="submit" fullWidth>
+          {loginError ? (
+            <NexText className="login-form__error" variant="label" role="alert">
+              {loginError}
+            </NexText>
+          ) : null}
+          <NexButton type="submit" fullWidth disabled={isSubmitting}>
             {t("login.k_Main_Button_Login")}
           </NexButton>
         </form>

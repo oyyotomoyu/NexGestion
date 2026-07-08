@@ -14,10 +14,12 @@ interface NexSelectProps<Value extends string> {
   value: Value;
   options: NexSelectOption<Value>[];
   onChange: (value: Value) => void;
+  menuPlacement?: "bottom" | "top";
 }
 
 export function NexSelect<Value extends string>({
   ariaLabel,
+  menuPlacement = "bottom",
   onChange,
   options,
   value,
@@ -38,7 +40,7 @@ export function NexSelect<Value extends string>({
   }, []);
 
   return (
-    <div className="nex-select" ref={rootRef}>
+    <div className="nex-select" data-menu-placement={menuPlacement} ref={rootRef}>
       <button
         className="nex-select__trigger"
         type="button"

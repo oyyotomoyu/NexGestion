@@ -56,6 +56,11 @@
   box-shadow: 0 12px 28px var(--color-shadow);
 }
 
+.nex-select[data-menu-placement="top"] .nex-select__menu {
+  top: auto;
+  bottom: calc(100% + 6px);
+}
+
 .nex-select__option {
   display: block;
   padding: 9px 10px;

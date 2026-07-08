@@ -15,5 +15,11 @@ export default defineConfig({
       allow: [path.resolve(__dirname, "..")],
     },
     port: 5173,
+    proxy: {
+      "/api": {
+        target: "http://localhost:8080",
+        changeOrigin: true,
+      },
+    },
   },
 });
