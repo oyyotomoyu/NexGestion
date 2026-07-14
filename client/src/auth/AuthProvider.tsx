@@ -14,6 +14,7 @@ import {
   getCurrentUser,
   type LoginInput,
 } from "@/requests/auth";
+import { getUser } from "@/requests/users";
 import type { User } from "@/requests/users/types";
 
 type AuthStatus = "checking" | "authenticated" | "unauthenticated";
@@ -29,17 +30,36 @@ interface AuthContextValue {
 
 const AuthContext = createContext<AuthContextValue | null>(null);
 const isDevAuthBypassed = import.meta.env.DEV;
+const devUserId = import.meta.env.VITE_DEV_USER_ID ?? "0";
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [status, setStatus] = useState<AuthStatus>(
-    isDevAuthBypassed ? "authenticated" : "checking",
+    "checking",
   );
   const [user, setUser] = useState<User | null>(null);
 
   useEffect(() => {
     if (isDevAuthBypassed) {
-      setStatus("authenticated");
-      return;
+      let isMounted = true;
+
+      async function restoreDevSession() {
+        try {
+          const devUser = await getUser(devUserId);
+          if (!isMounted) return;
+          setUser(devUser);
+          setStatus("authenticated");
+        } catch {
+          if (!isMounted) return;
+          setUser(null);
+          setStatus("unauthenticated");
+        }
+      }
+
+      void restoreDevSession();
+
+      return () => {
+        isMounted = false;
+      };
     }
 
     let isMounted = true;
@@ -67,6 +87,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   async function signIn(input: LoginInput) {
     if (isDevAuthBypassed) {
+      const devUser = await getUser(devUserId);
+      setUser(devUser);
       setStatus("authenticated");
       return;
     }
@@ -79,13 +101,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   async function signOut() {
     if (isDevAuthBypassed) {
-      setStatus("authenticated");
+      setUser(null);
+      setStatus("unauthenticated");
       return;
     }
 
-    await logout();
-    setUser(null);
-    setStatus("unauthenticated");
+    try {
+      await logout();
+    } finally {
+      setUser(null);
+      setStatus("unauthenticated");
+    }
   }
 
   const value = useMemo<AuthContextValue>(

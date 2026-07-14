@@ -1,17 +1,20 @@
 .app-layout {
-  min-height: 100vh;
+  height: 100vh;
   display: grid;
   grid-template-columns: 240px minmax(0, 1fr);
+  overflow: hidden;
   background: var(--color-background);
   color: var(--color-text);
 }
 
 .app-sidebar {
   display: flex;
-  min-height: 100vh;
+  height: 100vh;
+  min-height: 0;
   flex-direction: column;
   justify-content: space-between;
   gap: 28px;
+  overflow: hidden;
   padding: 24px 18px;
   background: var(--color-surface);
   border-right: 1px solid var(--color-border);
@@ -51,17 +54,28 @@
 }
 
 .app-main {
+  min-height: 0;
+  overflow: auto;
   padding: 32px;
 }
 
 @media (max-width: 720px) {
   .app-layout {
+    height: auto;
+    min-height: 100vh;
     grid-template-columns: 1fr;
+    overflow: visible;
   }
 
   .app-sidebar {
+    height: auto;
     min-height: auto;
+    overflow: visible;
     border-right: 0;
     border-bottom: 1px solid var(--color-border);
+  }
+
+  .app-main {
+    overflow: visible;
   }
 }
