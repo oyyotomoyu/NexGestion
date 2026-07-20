@@ -5,6 +5,8 @@ import AppLayout from "@/layouts/AppLayout";
 import Dashboard from "@/views/Dashboard";
 import Login from "@/views/Login";
 import Settings from "@/views/Settings";
+import Roles from "@/views/Settings/Roles";
+import RoleDetail from "@/views/Settings/Roles/RoleDetail";
 
 const routes: RouteObject[] = [
   {
@@ -30,6 +32,29 @@ const routes: RouteObject[] = [
       {
         path: "settings",
         element: <Settings />,
+        children: [
+          {
+            index: true,
+            element: <Navigate to="access-control/roles" replace />,
+          },
+          {
+            path: "access-control",
+            children: [
+              {
+                index: true,
+                element: <Navigate to="roles" replace />,
+              },
+              {
+                path: "roles",
+                element: <Roles />,
+              },
+              {
+                path: "roles/:roleId",
+                element: <RoleDetail />,
+              },
+            ],
+          },
+        ],
       },
     ],
   },
