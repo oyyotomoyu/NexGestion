@@ -19,10 +19,18 @@ export interface EmployeeProfile {
 
 export interface Role {
   id: string;
-  name: string;
+  title: string;
   description: string | null;
   is_system: boolean;
   grants_all_permissions: boolean;
+  permissions: Permission[];
+}
+
+export interface Permission {
+  id: string;
+  permission_key: string;
+  module: string;
+  description: string | null;
 }
 
 export interface UserGroup {

@@ -40,7 +40,7 @@ func TestUserDatabaseCreatesProtectedAdmin(t *testing.T) {
 		t.Fatalf("query administrator: %v", err)
 	}
 
-	if email != "admin@example.com" || employeeNumber != "0" || roleName != "Administrator" {
+	if email != "admin@example.com" || employeeNumber != "0" || roleName != "Admin" {
 		t.Fatalf("unexpected administrator: email=%q employee=%q role=%q", email, employeeNumber, roleName)
 	}
 	if protected != 1 || grantsAllPermissions != 1 {
@@ -58,6 +58,23 @@ func TestUserDatabaseCreatesProtectedAdmin(t *testing.T) {
 	}
 	if _, err := db.Exec(`UPDATE users SET deleted_at = 'now' WHERE id = ?`, adminUserID); err == nil || !strings.Contains(err.Error(), "protected user") {
 		t.Fatalf("expected protected user soft deletion error, got %v", err)
+	}
+	if _, err := db.Exec(`UPDATE roles SET name = 'Owner' WHERE id = ?`, adminRoleID); err == nil || !strings.Contains(err.Error(), "admin role") {
+		t.Fatalf("expected protected Admin role update error, got %v", err)
+	}
+	if _, err := db.Exec(`DELETE FROM roles WHERE id = ?`, adminRoleID); err == nil || !strings.Contains(err.Error(), "admin role") {
+		t.Fatalf("expected protected Admin role deletion error, got %v", err)
+	}
+	if _, err := db.Exec(`
+		INSERT INTO users (id, display_name, email, password_hash, status, created_at, updated_at)
+		VALUES ('another-user', 'Another', 'another@example.com', 'hash', 'active', 'now', 'now')`); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := db.Exec(`INSERT INTO user_roles (user_id, role_id, created_at) VALUES ('another-user', ?, 'now')`, adminRoleID); err == nil || !strings.Contains(err.Error(), "admin role") {
+		t.Fatalf("expected exclusive Admin role assignment error, got %v", err)
+	}
+	if _, err := db.Exec(`DELETE FROM user_roles WHERE user_id = ? AND role_id = ?`, adminUserID, adminRoleID); err == nil || !strings.Contains(err.Error(), "admin role") {
+		t.Fatalf("expected protected Admin role removal error, got %v", err)
 	}
 }
 
@@ -81,5 +98,55 @@ func TestUserDatabaseRejectsDuplicateEmailIgnoringCase(t *testing.T) {
 		VALUES ('another-user', 'Another', 'ADMIN@EXAMPLE.COM', 'hash', 'active', 'now', 'now')`)
 	if err == nil {
 		t.Fatal("expected case-insensitive duplicate email error")
+	}
+}
+
+func TestUserDatabaseMigratesAdministratorRoleTitle(t *testing.T) {
+	directory := t.TempDir()
+	path := filepath.Join(directory, "user.db")
+	db, err := sql.Open("sqlite", path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, err = db.Exec(`CREATE TABLE roles (
+		id TEXT PRIMARY KEY,
+		name TEXT NOT NULL COLLATE NOCASE UNIQUE,
+		description TEXT,
+		is_system INTEGER NOT NULL DEFAULT 0,
+		grants_all_permissions INTEGER NOT NULL DEFAULT 0,
+		created_at TEXT NOT NULL,
+		updated_at TEXT NOT NULL
+	)`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, err = db.Exec(`INSERT INTO roles
+		(id, name, description, is_system, grants_all_permissions, created_at, updated_at)
+		VALUES (?, 'Administrator', 'Initial system administrator', 1, 1, 'now', 'now')`, adminRoleID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := db.Close(); err != nil {
+		t.Fatal(err)
+	}
+
+	// Apply only the idempotent role migration statements needed by an existing database.
+	spec := userDatabaseSpec()
+	migration := DatabaseSpec{Name: "user.db", Schema: spec.Schema}
+	if err := EnsureDatabases(context.Background(), directory, []DatabaseSpec{migration}); err != nil {
+		t.Fatalf("migrate user database: %v", err)
+	}
+
+	db, err = sql.Open("sqlite", path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+	var title string
+	if err := db.QueryRow(`SELECT name FROM roles WHERE id = ?`, adminRoleID).Scan(&title); err != nil {
+		t.Fatal(err)
+	}
+	if title != "Admin" {
+		t.Fatalf("expected migrated Admin title, got %q", title)
 	}
 }

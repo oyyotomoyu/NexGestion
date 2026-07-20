@@ -129,6 +129,91 @@ func TestUserAPIRequiresAuthentication(t *testing.T) {
 	}
 }
 
+func TestRoleCRUDAPI(t *testing.T) {
+	router := testRouter(t)
+	accessToken, _ := loginForTest(t, router)
+
+	createResponse := serveAuthorized(router, http.MethodPost, "/api/roles", []byte(`{
+		"title":"Store Manager",
+		"description":"Manages daily store operations"
+	}`), accessToken)
+	if createResponse.Code != http.StatusCreated {
+		t.Fatalf("create role: expected %d, got %d: %s", http.StatusCreated, createResponse.Code, createResponse.Body.String())
+	}
+	var created system.Role
+	if err := json.NewDecoder(createResponse.Body).Decode(&created); err != nil {
+		t.Fatal(err)
+	}
+	if created.ID == "" || created.Title != "Store Manager" || created.IsSystem || created.GrantsAllPermissions {
+		t.Fatalf("unexpected role: %+v", created)
+	}
+	if created.Permissions == nil {
+		t.Fatal("expected an empty permissions array")
+	}
+
+	listResponse := serveAuthorized(router, http.MethodGet, "/api/roles", nil, accessToken)
+	if listResponse.Code != http.StatusOK {
+		t.Fatalf("list roles: expected %d, got %d: %s", http.StatusOK, listResponse.Code, listResponse.Body.String())
+	}
+	var list struct {
+		Roles []system.Role `json:"roles"`
+	}
+	if err := json.NewDecoder(listResponse.Body).Decode(&list); err != nil {
+		t.Fatal(err)
+	}
+	if len(list.Roles) != 2 {
+		t.Fatalf("expected Admin and custom roles, got %d", len(list.Roles))
+	}
+
+	getResponse := serveAuthorized(router, http.MethodGet, "/api/roles/"+created.ID, nil, accessToken)
+	if getResponse.Code != http.StatusOK {
+		t.Fatalf("get role: expected %d, got %d: %s", http.StatusOK, getResponse.Code, getResponse.Body.String())
+	}
+
+	updateResponse := serveAuthorized(router, http.MethodPatch, "/api/roles/"+created.ID, []byte(`{"title":"Branch Manager"}`), accessToken)
+	if updateResponse.Code != http.StatusOK {
+		t.Fatalf("update role: expected %d, got %d: %s", http.StatusOK, updateResponse.Code, updateResponse.Body.String())
+	}
+	var updated system.Role
+	if err := json.NewDecoder(updateResponse.Body).Decode(&updated); err != nil {
+		t.Fatal(err)
+	}
+	if updated.Title != "Branch Manager" {
+		t.Fatalf("unexpected updated role: %+v", updated)
+	}
+
+	deleteResponse := serveAuthorized(router, http.MethodDelete, "/api/roles/"+created.ID, nil, accessToken)
+	if deleteResponse.Code != http.StatusNoContent {
+		t.Fatalf("delete role: expected %d, got %d: %s", http.StatusNoContent, deleteResponse.Code, deleteResponse.Body.String())
+	}
+	missingResponse := serveAuthorized(router, http.MethodGet, "/api/roles/"+created.ID, nil, accessToken)
+	if missingResponse.Code != http.StatusNotFound {
+		t.Fatalf("get deleted role: expected %d, got %d", http.StatusNotFound, missingResponse.Code)
+	}
+}
+
+func TestAdminRoleIsProtectedAPI(t *testing.T) {
+	router := testRouter(t)
+	accessToken, _ := loginForTest(t, router)
+	const adminRoleID = "00000000-0000-0000-0000-000000000001"
+
+	response := serveAuthorized(router, http.MethodPatch, "/api/roles/"+adminRoleID, []byte(`{"title":"Owner"}`), accessToken)
+	if response.Code != http.StatusForbidden {
+		t.Fatalf("update Admin role: expected %d, got %d: %s", http.StatusForbidden, response.Code, response.Body.String())
+	}
+	response = serveAuthorized(router, http.MethodDelete, "/api/roles/"+adminRoleID, nil, accessToken)
+	if response.Code != http.StatusForbidden {
+		t.Fatalf("delete Admin role: expected %d, got %d: %s", http.StatusForbidden, response.Code, response.Body.String())
+	}
+}
+
+func TestRoleAPIRequiresAuthentication(t *testing.T) {
+	response := serve(testRouter(t), http.MethodGet, "/api/roles", nil)
+	if response.Code != http.StatusUnauthorized {
+		t.Fatalf("expected %d, got %d", http.StatusUnauthorized, response.Code)
+	}
+}
+
 func TestLoginRefreshMeAndLogout(t *testing.T) {
 	router := testRouter(t)
 	accessToken, refreshCookie := loginForTest(t, router)

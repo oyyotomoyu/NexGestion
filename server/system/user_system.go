@@ -125,6 +125,33 @@ func userDatabaseSpec() DatabaseSpec {
 				secret TEXT NOT NULL,
 				created_at TEXT NOT NULL
 			)`,
+			`UPDATE roles SET name = 'Admin' WHERE id = '00000000-0000-0000-0000-000000000001' AND name = 'Administrator'`,
+			`CREATE TRIGGER IF NOT EXISTS prevent_admin_role_update
+			BEFORE UPDATE ON roles
+			WHEN OLD.id = '00000000-0000-0000-0000-000000000001'
+			BEGIN
+				SELECT RAISE(ABORT, 'admin role cannot be edited');
+			END`,
+			`CREATE TRIGGER IF NOT EXISTS prevent_admin_role_delete
+			BEFORE DELETE ON roles
+			WHEN OLD.id = '00000000-0000-0000-0000-000000000001'
+			BEGIN
+				SELECT RAISE(ABORT, 'admin role cannot be deleted');
+			END`,
+			`CREATE TRIGGER IF NOT EXISTS prevent_admin_role_assignment
+			BEFORE INSERT ON user_roles
+			WHEN NEW.role_id = '00000000-0000-0000-0000-000000000001'
+				AND NEW.user_id <> '00000000-0000-0000-0000-000000000001'
+			BEGIN
+				SELECT RAISE(ABORT, 'admin role cannot be assigned to another user');
+			END`,
+			`CREATE TRIGGER IF NOT EXISTS prevent_admin_role_removal
+			BEFORE DELETE ON user_roles
+			WHEN OLD.role_id = '00000000-0000-0000-0000-000000000001'
+				AND OLD.user_id = '00000000-0000-0000-0000-000000000001'
+			BEGIN
+				SELECT RAISE(ABORT, 'admin role cannot be removed from the administrator');
+			END`,
 			`CREATE TRIGGER IF NOT EXISTS prevent_protected_user_delete
 			BEFORE DELETE ON users
 			WHEN OLD.is_protected = 1
@@ -194,7 +221,7 @@ func seedAdminUser(ctx context.Context, tx *sql.Tx) error {
 	if _, err := tx.ExecContext(ctx, `
 		INSERT INTO roles (
 			id, name, description, is_system, grants_all_permissions, created_at, updated_at
-		) VALUES (?, 'Administrator', 'Initial system administrator', 1, 1, ?, ?)`,
+		) VALUES (?, 'Admin', 'Initial system administrator', 1, 1, ?, ?)`,
 		adminRoleID, now, now,
 	); err != nil {
 		return fmt.Errorf("create administrator role: %w", err)

@@ -170,7 +170,7 @@ export default function Dashboard() {
                   <dl className="dashboard-user__item" key={role.id}>
                     <div>
                       <dt>{t("global.k_Dashboard_Label_RoleName")}</dt>
-                      <dd>{role.name}</dd>
+                      <dd>{role.title}</dd>
                     </div>
                     <div>
                       <dt>{t("global.k_Dashboard_Label_RoleDescription")}</dt>

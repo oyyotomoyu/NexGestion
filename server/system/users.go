@@ -55,11 +55,12 @@ type EmployeeProfile struct {
 }
 
 type Role struct {
-	ID                   string  `json:"id"`
-	Name                 string  `json:"name"`
-	Description          *string `json:"description"`
-	IsSystem             bool    `json:"is_system"`
-	GrantsAllPermissions bool    `json:"grants_all_permissions"`
+	ID                   string       `json:"id"`
+	Title                string       `json:"title"`
+	Description          *string      `json:"description"`
+	IsSystem             bool         `json:"is_system"`
+	GrantsAllPermissions bool         `json:"grants_all_permissions"`
+	Permissions          []Permission `json:"permissions"`
 }
 
 type UserGroup struct {
@@ -187,23 +188,29 @@ func getUser(ctx context.Context, db *sql.DB, id string) (*User, error) {
 	}
 
 	u.Roles = []Role{}
-	rows, err := db.QueryContext(ctx, `SELECT r.id, r.name, r.description, r.is_system, r.grants_all_permissions
+	rows, err := db.QueryContext(ctx, `SELECT r.id
 		FROM roles r JOIN user_roles ur ON ur.role_id = r.id WHERE ur.user_id = ? ORDER BY r.name`, id)
 	if err != nil {
 		return nil, err
 	}
+	roleIDs := []string{}
 	for rows.Next() {
-		var r Role
-		var sys, all int
-		if err := rows.Scan(&r.ID, &r.Name, &r.Description, &sys, &all); err != nil {
+		var roleID string
+		if err := rows.Scan(&roleID); err != nil {
 			rows.Close()
 			return nil, err
 		}
-		r.IsSystem, r.GrantsAllPermissions = sys == 1, all == 1
-		u.Roles = append(u.Roles, r)
+		roleIDs = append(roleIDs, roleID)
 	}
 	if err := rows.Close(); err != nil {
 		return nil, err
+	}
+	for _, roleID := range roleIDs {
+		role, err := getRole(ctx, db, roleID)
+		if err != nil {
+			return nil, err
+		}
+		u.Roles = append(u.Roles, *role)
 	}
 
 	u.Groups = []UserGroup{}

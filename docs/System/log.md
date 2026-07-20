@@ -2,29 +2,29 @@
 
 ## 1. Purpose
 
-Log System 統一記錄 NexGestion 的系統事件與使用者操作。Log 寫入專案根目錄的 `log` 資料夾，並提供受登入保護的 API，讓具備權限的使用者依時間與狀態查詢紀錄。
+The Log System records NexGestion system events and user actions consistently. It writes logs to the `log` directory at the project root and provides an authenticated API through which authorized users can query records by time and status.
 
-Log System 必須符合以下需求：
+The Log System must meet these requirements:
 
-- Log 資料夾不存在時自動建立。
-- 每筆 Log 包含日期、24 小時制時間、狀態、來源 IP、使用者 ID 與內容。
-- 呼叫 Log function 時只需要提供狀態與內容。
-- 支援依時間範圍及狀態篩選。
-- Log 最多保留一週，超過七天自動刪除。
+- Create the log directory automatically when it does not exist.
+- Include the date, 24-hour time, status, source IP address, user ID, and content in every record.
+- Require callers to provide only a status and content to the log function.
+- Support filtering by time range and status.
+- Retain logs for no more than one week and automatically delete records older than seven days.
 
 ## 2. Storage Location
 
-預設儲存位置為 NexGestion 專案或執行目錄下的：
+The default storage location under the NexGestion project or runtime directory is:
 
 ```text
 log/
 ```
 
-Server 啟動時必須使用 `os.MkdirAll("log", 0755)` 確保路徑存在。路徑已存在時不得覆寫或清空內容。
+At startup, the server must call `os.MkdirAll("log", 0755)` to ensure the path exists. It must not overwrite or clear an existing directory.
 
-正式部署可透過 `LOG_DIR` 環境變數指定其他位置；未設定時使用根目錄的 `log`。
+Production deployments may specify another location through the `LOG_DIR` environment variable. When it is unset, the root-level `log` directory is used.
 
-Log 採每日一個 JSON Lines 檔案：
+Logs use one JSON Lines file per day:
 
 ```text
 log/
@@ -32,48 +32,48 @@ log/
 └── 2026-07-06.log
 ```
 
-檔名只能由 Log System 根據日期產生，不接受 API 或 Client 指定檔名，避免 path traversal。
+Only the Log System may generate filenames, based on the date. APIs and clients cannot supply filenames, which prevents path traversal.
 
 ## 3. Log Record Format
 
-每一行代表一筆獨立 JSON：
+Each line contains one independent JSON record:
 
 ```json
 {"timestamp":"2026-07-06 14:35:21 +08:00","status":"info","ip":"192.168.1.20","user_id":"00000000-0000-0000-0000-000000000001","content":"updated user 68cd..."}
 ```
 
-欄位定義：
+Field definitions:
 
 | Field | Type | Required | Description |
 | --- | --- | --- | --- |
-| `timestamp` | string | Yes | `YYYY-MM-DD HH:mm:ss ±HH:MM`，使用 24 小時制並包含時區 |
-| `status` | string | Yes | `info`, `warning`, `error` |
-| `ip` | string | Yes | 發出操作的 Client IP；非 HTTP 背景工作使用空字串 |
-| `user_id` | string | Yes | JWT 對應的 `users.id`；未登入或背景工作使用空字串 |
-| `content` | string | Yes | Log 內容，不得包含密碼、原始 Token 或其他 Secret |
+| `timestamp` | string | Yes | `YYYY-MM-DD HH:mm:ss ±HH:MM`, using 24-hour time and including the time-zone offset |
+| `status` | string | Yes | `info`, `warning`, or `error` |
+| `ip` | string | Yes | Client IP address that initiated the action; an empty string for non-HTTP background work |
+| `user_id` | string | Yes | The `users.id` associated with the JWT; an empty string for unauthenticated or background work |
+| `content` | string | Yes | Log content; must not contain passwords, raw tokens, or other secrets |
 
-時間使用 Server 設定的時區；NexGestion 預設為 `Asia/Taipei`。內部篩選時應解析為含時區的時間值，避免直接以顯示字串比較。
+Timestamps use the server's configured time zone. NexGestion defaults to `Asia/Taipei`. Internal filtering must parse timestamps as time values with time-zone information instead of comparing display strings directly.
 
-JSON Lines 可避免 content 中的換行或特殊字元破壞 Log 結構。每次寫入必須使用 JSON encoder，不得自行拼接字串。
+JSON Lines prevents line breaks or special characters in content from corrupting the log structure. Every write must use a JSON encoder rather than manually concatenating strings.
 
 ## 4. Status Levels
 
-僅接受三種狀態：
+Only three statuses are accepted:
 
-- `info`：正常操作，例如登入成功、新增或更新資料。
-- `warning`：可恢復但值得注意的事件，例如登入失敗、輸入驗證失敗。
-- `error`：操作失敗或系統異常，例如資料庫錯誤、檔案寫入失敗。
+- `info`: normal operations, such as a successful login or data creation or update.
+- `warning`: recoverable but notable events, such as a failed login or input validation failure.
+- `error`: failed operations or system errors, such as database or file-write failures.
 
-狀態輸入應正規化為小寫。不在允許清單中的狀態必須回傳錯誤，不得靜默改成 `info`。
+Status input must be normalized to lowercase. A value outside the accepted set must return an error and must not silently become `info`.
 
 ## 5. Request Context
 
-Log Middleware 在 Authentication Middleware 驗證 JWT 後建立 request-scoped logger，並自動綁定：
+After Authentication Middleware validates the JWT, Log Middleware creates a request-scoped logger and automatically binds:
 
-- Client IP；
-- JWT `sub` claim 中的 user ID。
+- the client IP address; and
+- the user ID from the JWT `sub` claim.
 
-流程如下：
+The flow is:
 
 ```text
 HTTP Request
@@ -84,13 +84,13 @@ HTTP Request
   -> log/YYYY-MM-DD.log
 ```
 
-Client 不得在 Request body 或 header 自行指定 Log 的 `user_id`。使用者 ID 只能來自已驗證的 JWT。
+Clients cannot specify a log record's `user_id` in a request body or header. The user ID must come only from a verified JWT.
 
-若服務部署在 reverse proxy 後方，只有在 proxy 位址位於受信任清單時，才可讀取 `X-Forwarded-For`。否則一律使用 `RemoteAddr`，避免 Client 偽造 IP。
+When the service runs behind a reverse proxy, it may read `X-Forwarded-For` only if the proxy address is in the trusted proxy list. Otherwise, it must use `RemoteAddr` to prevent clients from spoofing an IP address.
 
 ## 6. Log Function
 
-呼叫端只需要提供狀態與內容：
+Callers provide only the status and content:
 
 ```go
 logger := logs.FromContext(r.Context())
@@ -100,7 +100,7 @@ if err := logger.Log("info", "created user "+userID); err != nil {
 }
 ```
 
-建議介面：
+Recommended interface:
 
 ```go
 type RequestLogger interface {
@@ -108,29 +108,29 @@ type RequestLogger interface {
 }
 ```
 
-`FromContext` 取得的 logger 已包含 IP 與 user ID，因此 `Log` function 不需要額外參數。不得使用可變的全域變數保存目前 request 的使用者或 IP，否則多個 request 並行時可能互相污染。
+The logger returned by `FromContext` already contains the IP address and user ID, so the `Log` function needs no additional parameters. Mutable global variables must not hold the current request's user or IP address because concurrent requests could contaminate one another.
 
-背景工作使用 System Logger，同樣只傳入狀態與內容，但其 `ip` 和 `user_id` 為空字串：
+Background work uses the System Logger and also provides only a status and content. Its `ip` and `user_id` values are empty strings:
 
 ```go
 systemLogger.Log("error", "database backup failed")
 ```
 
-Log 寫入必須支援多個 goroutine 並行呼叫，使用 mutex 或單一 writer queue 避免多筆 JSON 交錯。寫入成功前不得回報成功；Log 寫入失敗時不得造成 Server panic。
+Log writes must support concurrent calls from multiple goroutines. Use a mutex or a single writer queue to prevent JSON records from interleaving. A call must not report success before the write succeeds, and a log-write failure must not cause a server panic.
 
 ## 7. Events to Record
 
-第一階段至少記錄：
+The first phase must record at least:
 
-- 登入成功與失敗；
-- 帳號被鎖定；
-- Refresh Token 成功或失敗；
-- 登出；
-- 新增、編輯、刪除使用者；
-- API 發生內部錯誤；
-- Server 啟動與關閉。
+- successful and failed logins;
+- account locks;
+- successful and failed refresh-token operations;
+- logouts;
+- user creation, updates, and deletion;
+- internal API errors; and
+- server startup and shutdown.
 
-使用者操作的 content 應包含 action 與 target ID，例如：
+Content for user actions should include the action and target ID, for example:
 
 ```text
 created user 68cd...
@@ -138,13 +138,13 @@ updated user 68cd...
 deleted user 68cd...
 ```
 
-禁止記錄：
+Never record:
 
-- 明文密碼或 `password_hash`；
-- Access Token 或 Refresh Token；
-- Cookie、Authorization header；
-- JWT signing secret；
-- 完整的敏感 Request body。
+- plaintext passwords or `password_hash`;
+- access tokens or refresh tokens;
+- cookies or the `Authorization` header;
+- the JWT signing secret; or
+- complete sensitive request bodies.
 
 ## 8. Read Log API
 
@@ -154,26 +154,26 @@ deleted user 68cd...
 GET /api/logs
 ```
 
-此 API 必須通過 Authentication Middleware。第一階段要求登入；加入權限系統後應要求 `logs.read` permission。
+This API must use Authentication Middleware. The first phase requires authentication; after the permission system is introduced, it must require the `logs.read` permission.
 
 ### 8.2 Query Parameters
 
 | Parameter | Required | Description |
 | --- | --- | --- |
-| `start` | No | 起始時間，RFC 3339，例如 `2026-07-06T00:00:00+08:00` |
-| `end` | No | 結束時間，RFC 3339，例如 `2026-07-06T23:59:59+08:00` |
-| `status` | No | `info`, `warning`, `error`；可用逗號指定多個狀態 |
-| `limit` | No | 回傳筆數，預設 100，最大 1000 |
-| `cursor` | No | 分頁游標，避免一次載入整週 Log |
+| `start` | No | Start time in RFC 3339 format, for example `2026-07-06T00:00:00+08:00` |
+| `end` | No | End time in RFC 3339 format, for example `2026-07-06T23:59:59+08:00` |
+| `status` | No | `info`, `warning`, or `error`; a comma-separated list may select multiple statuses |
+| `limit` | No | Number of records to return; default 100, maximum 1000 |
+| `cursor` | No | Pagination cursor that prevents loading an entire week at once |
 
-範例：
+Example:
 
 ```http
 GET /api/logs?start=2026-07-06T08:00:00%2B08:00&end=2026-07-06T18:00:00%2B08:00&status=warning,error&limit=100
 Authorization: Bearer <access-token>
 ```
 
-若未提供時間，預設查詢最近 24 小時。允許查詢的時間範圍不得早於目前時間減七天。
+When no time is supplied, the query defaults to the last 24 hours. The permitted query range cannot begin earlier than seven days before the current time.
 
 ### 8.3 Response
 
@@ -192,38 +192,38 @@ Authorization: Bearer <access-token>
 }
 ```
 
-結果預設依時間由新到舊排序。沒有下一頁時 `next_cursor` 為空字串。
+Results are ordered from newest to oldest by default. `next_cursor` is an empty string when there is no next page.
 
 ### 8.4 Validation and Errors
 
-- 時間或狀態格式錯誤：`400 Bad Request`。
-- 未登入或 Token 無效：`401 Unauthorized`。
-- 沒有讀取 Log 權限：`403 Forbidden`。
-- Log 讀取失敗：`500 Internal Server Error`，不得回傳實際檔案路徑。
+- Invalid time or status format: `400 Bad Request`.
+- Missing authentication or invalid token: `401 Unauthorized`.
+- Missing log-read permission: `403 Forbidden`.
+- Log-read failure: `500 Internal Server Error`; the response must not expose the real file path.
 
-API 只能讀取符合 `YYYY-MM-DD.log` 格式且位於設定 Log 目錄內的檔案。
+The API may read only files inside the configured log directory whose names match `YYYY-MM-DD.log`.
 
 ## 9. Retention
 
-Log 不得保存超過一週。保留規則採用精確七天：
+Logs must not be retained for more than one week. Retention uses an exact seven-day cutoff:
 
 ```text
 record timestamp < current time - 7 days
 ```
 
-清理程序應在以下時機執行：
+Cleanup must run:
 
-1. Server 啟動時立即清理一次。
-2. Server 運作期間每小時檢查一次。
-3. 建立新日期 Log 檔案前再次快速檢查。
+1. immediately at server startup;
+2. every hour while the server is running; and
+3. as a quick check before creating a log file for a new date.
 
-每日檔案整份早於保留期限時直接刪除。如果期限落在某個檔案日期中間，應重寫該檔案，只保留七天內的紀錄，才能符合「不超過一週」。
+Delete a whole daily file when all its records are older than the retention cutoff. If the cutoff falls within a file's date, rewrite that file and retain only records from the last seven days to satisfy the one-week maximum.
 
-清理時只能刪除 Log System 管理的 `YYYY-MM-DD.log`，不得刪除 `log` 目錄中的其他檔案。清理失敗需寫入 Server 的標準錯誤輸出，避免嘗試寫入同一個故障中的 Log System 而形成遞迴。
+Cleanup may delete only `YYYY-MM-DD.log` files managed by the Log System. It must not delete other files from the `log` directory. A cleanup failure must be written to the server's standard error output; do not attempt to write it through the failing Log System and create a recursive failure.
 
 ## 10. Router Registration
 
-Log API 應在集中式 Router 中註冊並套用驗證：
+Register the Log API in the centralized router and apply authentication:
 
 ```go
 router.HandleFunc(
@@ -232,23 +232,23 @@ router.HandleFunc(
 )
 ```
 
-Middleware 順序應為：
+Middleware order must be:
 
 ```text
 Authentication -> Request Logger -> API Handler
 ```
 
-如此可確保 Request Logger 取得的是已驗證的 user ID。
+This order ensures that the Request Logger receives a verified user ID.
 
 ## 11. Implementation Order
 
-1. 建立 `log` package、Log record model 與安全的每日檔案 writer。
-2. Server 啟動時建立 Log 目錄。
-3. 建立 request-scoped Log Middleware。
-4. 將登入及 User CRUD 操作接上 Log function。
-5. 實作時間、狀態篩選與分頁查詢。
-6. 在 Router 註冊受保護的 `GET /api/logs`。
-7. 實作啟動清理與每小時 retention worker。
-8. 加入並行寫入、篩選、權限與七天清理測試。
+1. Create the `log` package, log-record model, and safe daily-file writer.
+2. Create the log directory during server startup.
+3. Create request-scoped Log Middleware.
+4. Connect login and User CRUD operations to the log function.
+5. Implement time and status filtering and pagination.
+6. Register the protected `GET /api/logs` endpoint in the router.
+7. Implement startup cleanup and an hourly retention worker.
+8. Add tests for concurrent writes, filtering, permissions, and seven-day cleanup.
 
-目前已完成每日檔案 writer、request-scoped logger、登入與 User CRUD 操作紀錄、`GET /api/logs` 篩選與分頁，以及精確七天 retention worker。`logs.read` Permission Middleware 仍屬後續工作。
+The daily-file writer, request-scoped logger, login and User CRUD action records, filtered and paginated `GET /api/logs`, and exact seven-day retention worker are implemented. The `logs.read` Permission Middleware remains future work.

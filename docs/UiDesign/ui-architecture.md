@@ -265,7 +265,7 @@ Initial language direction:
 - English (`ENG`), Traditional Chinese (`CHT`), and Japanese (`JPN`) are supported;
   English is the default when the user has no saved preference.
 - Language selector options are the deliberate translation exception. Keep their
-  native names wrapped in `noI18n()`: `English`, `正體中文`, and `日本語`.
+  native names wrapped in `noI18n()` for English, Traditional Chinese, and Japanese.
 - Keep shared terms in `Global` or `Component`.
 - Keep business module copy in module-specific files.
 - All user-visible strings, placeholders, accessibility labels, and document titles

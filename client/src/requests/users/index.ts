@@ -24,10 +24,11 @@ const mockUsers: User[] = [
     roles: [
       {
         id: "role-admin",
-        name: "Administrator",
+        title: "Admin",
         description: "Full system access reserved for user id 0",
         is_system: true,
         grants_all_permissions: true,
+        permissions: [],
       },
     ],
     groups: [],
@@ -67,10 +68,11 @@ const mockUsers: User[] = [
     roles: [
       {
         id: "role-manager",
-        name: "Manager",
+        title: "Manager",
         description: "Team management access",
         is_system: true,
         grants_all_permissions: false,
+        permissions: [],
       },
     ],
     groups: [
@@ -120,10 +122,11 @@ const mockUsers: User[] = [
     roles: [
       {
         id: "role-hr",
-        name: "HR",
+        title: "HR",
         description: "People operations access",
         is_system: false,
         grants_all_permissions: false,
+        permissions: [],
       },
     ],
     groups: [
@@ -173,10 +176,11 @@ const mockUsers: User[] = [
     roles: [
       {
         id: "role-finance",
-        name: "Finance",
+        title: "Finance",
         description: "Finance workspace access",
         is_system: false,
         grants_all_permissions: false,
+        permissions: [],
       },
     ],
     groups: [
@@ -226,10 +230,11 @@ const mockUsers: User[] = [
     roles: [
       {
         id: "role-support",
-        name: "Support",
+        title: "Support",
         description: "Customer support access",
         is_system: false,
         grants_all_permissions: false,
+        permissions: [],
       },
     ],
     groups: [
@@ -279,10 +284,11 @@ const mockUsers: User[] = [
     roles: [
       {
         id: "role-sales",
-        name: "Sales",
+        title: "Sales",
         description: "Sales workspace access",
         is_system: false,
         grants_all_permissions: false,
+        permissions: [],
       },
     ],
     groups: [
@@ -332,10 +338,11 @@ const mockUsers: User[] = [
     roles: [
       {
         id: "role-product",
-        name: "Product",
+        title: "Product",
         description: "Product planning access",
         is_system: false,
         grants_all_permissions: false,
+        permissions: [],
       },
     ],
     groups: [
@@ -385,10 +392,11 @@ const mockUsers: User[] = [
     roles: [
       {
         id: "role-engineering",
-        name: "Engineering",
+        title: "Engineering",
         description: "Engineering workspace access",
         is_system: false,
         grants_all_permissions: false,
+        permissions: [],
       },
     ],
     groups: [
@@ -458,10 +466,11 @@ const mockUsers: User[] = [
     roles: [
       {
         id: "role-customer-success",
-        name: "Customer Success",
+        title: "Customer Success",
         description: "Customer success workspace access",
         is_system: false,
         grants_all_permissions: false,
+        permissions: [],
       },
     ],
     groups: [

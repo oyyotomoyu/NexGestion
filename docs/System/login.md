@@ -2,9 +2,9 @@
 
 ## 1. Purpose
 
-NexGestion 的所有業務 API 都必須先完成登入驗證。只有健康檢查、登入與更新 Access Token 等必要端點可以匿名存取。
+All NexGestion business APIs must require authentication. Only essential endpoints such as health checks, login, and access-token refresh may allow anonymous access.
 
-登入機制參考 xinsight 的設計，採用以下分層：
+The login system follows the layered design used by xinsight:
 
 ```text
 HTTP Request
@@ -15,18 +15,18 @@ HTTP Request
   -> user.db
 ```
 
-Router 決定端點是否需要登入；Middleware 統一驗證 Token；API Handler 負責 HTTP 與 JSON；帳號及 Session 的資料操作必須由 System Service 執行。
+The router determines whether an endpoint requires authentication. Middleware validates tokens consistently. API handlers manage HTTP and JSON concerns. System services must perform all account and session data operations.
 
 ## 2. Authentication Flow
 
 ### 2.1 Login
 
-1. Client 送出 email 與 password。
-2. System 將 email 去除前後空白並轉成小寫。
-3. 查詢未刪除的使用者，檢查帳號狀態與鎖定時間。
-4. 使用 bcrypt 比對 `password_hash`，不得解密或回傳密碼雜湊。
-5. 登入成功後清除失敗次數、更新 `last_login_at`，並簽發 Access Token 與 Refresh Token。
-6. Client 將 Access Token 放在後續 API 的 `Authorization` header。
+1. The client submits an email and password.
+2. The system trims surrounding whitespace from the email and converts it to lowercase.
+3. The system finds a non-deleted user and checks the account status and lock expiration.
+4. The system compares the password against `password_hash` using bcrypt. It must never decrypt or return the password hash.
+5. After a successful login, the system clears the failed-attempt count, updates `last_login_at`, and issues an access token and refresh token.
+6. The client includes the access token in the `Authorization` header of subsequent API requests.
 
 ```http
 Authorization: Bearer <access-token>
@@ -34,64 +34,64 @@ Authorization: Bearer <access-token>
 
 ### 2.2 Authenticated Request
 
-Authentication Middleware 必須依序檢查：
+Authentication Middleware must perform these checks in order:
 
-1. `Authorization` header 是否存在且使用 `Bearer` 格式。
-2. Access Token 的簽章、用途與到期時間是否有效。
-3. Token 對應的使用者是否仍存在且未被 soft delete。
-4. 使用者 `status` 是否為 `active`。
-5. 驗證成功後，將 `user_id` 與 Token claims 放入 request context，再交給 API Handler。
+1. The `Authorization` header exists and uses the `Bearer` scheme.
+2. The access token has a valid signature, purpose, and expiration time.
+3. The user referenced by the token still exists and has not been soft-deleted.
+4. The user's `status` is `active`.
+5. After successful validation, the middleware places the `user_id` and token claims in the request context and passes control to the API handler.
 
-驗證失敗回傳 `401 Unauthorized`。已登入但沒有操作權限時回傳 `403 Forbidden`。
+Failed authentication returns `401 Unauthorized`. An authenticated request without sufficient permission returns `403 Forbidden`.
 
 ### 2.3 Refresh
 
-Access Token 過期後，Client 使用 Refresh Token 取得新的 Access Token。System 必須驗證 Refresh Token 是否：
+After an access token expires, the client uses a refresh token to obtain a new access token. The system must verify that the refresh token:
 
-- 存在於 `sessions`；
-- 尚未到期；
-- 尚未撤銷；
-- 對應到有效且啟用中的使用者。
+- exists in `sessions`;
+- has not expired;
+- has not been revoked; and
+- belongs to a valid, active user.
 
-Refresh Token 每次使用後應旋轉：撤銷舊 Token 並產生新 Token，降低 Token 被重複利用的風險。
+Refresh tokens must rotate after every use. The system revokes the old token and creates a new token to reduce token-reuse risk.
 
 ### 2.4 Logout
 
-登出時撤銷目前 Session 的 Refresh Token 並清除 Cookie。Access Token 不需要寫入資料庫，會在短時間內自然到期。
+Logout revokes the current session's refresh token and clears its cookie. Access tokens do not need to be stored in the database and expire naturally after a short period.
 
-停用、刪除使用者或修改密碼時，必須撤銷該使用者的全部 Session。
+Disabling or deleting a user, or changing a user's password, must revoke all of that user's sessions.
 
 ## 3. Token Design
 
 ### 3.1 Access Token
 
-- 格式：JWT
-- 簽章：HS256，使用至少 32 bytes 的隨機 secret
-- 建議效期：10 分鐘
-- 儲存位置：Client 記憶體，不寫入 local storage
-- 用途：呼叫受保護 API
+- Format: JWT
+- Signature: HS256 with a cryptographically random secret of at least 32 bytes
+- Recommended lifetime: 10 minutes
+- Storage: client memory, not local storage
+- Purpose: calling protected APIs
 
-建議 claims：
+Recommended claims:
 
 | Claim | Description |
 | --- | --- |
 | `sub` | Immutable `users.id` |
-| `jti` | Token unique identifier |
+| `jti` | Unique token identifier |
 | `iat` | Issued-at time |
 | `exp` | Expiration time |
-| `typ` | 固定為 `access` |
+| `typ` | Always `access` |
 
-角色與權限不應長期固化在 Token。Middleware 或 Permission Middleware 應從 UserSystem 取得目前有效權限，避免角色異動後舊 Token 仍保有權限。
+Roles and permissions must not be embedded in a token for long-term use. Middleware or Permission Middleware must obtain current effective permissions from UserSystem so old tokens do not retain access after role changes.
 
 ### 3.2 Refresh Token
 
-- 格式：使用加密安全亂數產生的 opaque token
-- 建議效期：30 天
-- 儲存位置：`HttpOnly`, `SameSite=Strict` Cookie；正式 HTTPS 環境必須加上 `Secure`
-- Server 端只儲存 SHA-256 hash，不儲存原始 Token
-- 用途：取得新的 Access Token，不得直接呼叫業務 API
+- Format: opaque token generated with cryptographically secure randomness
+- Recommended lifetime: 30 days
+- Storage: `HttpOnly`, `SameSite=Strict` cookie; production HTTPS environments must also use `Secure`
+- Server storage: SHA-256 hash only, never the original token
+- Purpose: obtaining a new access token; it cannot call business APIs directly
 
-JWT secret 不得寫死在原始碼或提交至版本控制。可從環境變數讀取，或在首次初始化時產生並存放於只有服務程序可讀取的檔案。
+The JWT secret must not be hard-coded or committed to version control. It may be read from an environment variable or generated during first-time initialization and stored in a file readable only by the service process.
 
 ## 4. API Endpoints
 
@@ -99,11 +99,11 @@ JWT secret 不得寫死在原始碼或提交至版本控制。可從環境變數
 
 | Method | Path | Description |
 | --- | --- | --- |
-| `GET` | `/api/health` | 健康檢查 |
-| `POST` | `/api/auth/login` | 使用 email/password 登入 |
-| `POST` | `/api/auth/refresh` | 使用 Refresh Token 更新 Token |
+| `GET` | `/api/health` | Health check |
+| `POST` | `/api/auth/login` | Log in with email and password |
+| `POST` | `/api/auth/refresh` | Refresh an access token with a refresh token |
 
-登入 Request：
+Login request:
 
 ```json
 {
@@ -112,7 +112,7 @@ JWT secret 不得寫死在原始碼或提交至版本控制。可從環境變數
 }
 ```
 
-登入成功 Response：
+Successful login response:
 
 ```json
 {
@@ -122,25 +122,30 @@ JWT secret 不得寫死在原始碼或提交至版本控制。可從環境變數
 }
 ```
 
-Refresh Token 由 `Set-Cookie` 回傳，不放入 JSON body。
+The refresh token is returned through `Set-Cookie`, not in the JSON body.
 
 ### 4.2 Protected Endpoints
 
 | Method | Path | Description |
 | --- | --- | --- |
-| `GET` | `/api/auth/me` | 取得目前登入者資訊 |
-| `POST` | `/api/auth/logout` | 登出目前 Session |
-| `GET` | `/api/users` | 讀取所有使用者 |
-| `POST` | `/api/users` | 新增使用者 |
-| `GET` | `/api/users/{id}` | 讀取特定使用者 |
-| `PUT/PATCH` | `/api/users/{id}` | 編輯使用者 |
-| `DELETE` | `/api/users/{id}` | Soft delete 使用者 |
+| `GET` | `/api/auth/me` | Get the currently authenticated user |
+| `POST` | `/api/auth/logout` | Log out the current session |
+| `GET` | `/api/users` | List all users |
+| `POST` | `/api/users` | Create a user |
+| `GET` | `/api/users/{id}` | Get a specific user |
+| `PUT/PATCH` | `/api/users/{id}` | Edit a user |
+| `DELETE` | `/api/users/{id}` | Soft-delete a user |
+| `GET` | `/api/roles` | List all roles |
+| `GET` | `/api/roles/{id}` | Get a role by ID |
+| `POST` | `/api/roles` | Create a custom role |
+| `PATCH` | `/api/roles/{id}` | Edit a custom role |
+| `DELETE` | `/api/roles/{id}` | Delete an unassigned custom role |
 
-未來新增的 API 預設都應放在受保護的 Router group；公開端點必須明確逐一註冊。
+New APIs must be placed in the protected router group by default. Every public endpoint must be registered explicitly.
 
 ## 5. Session Storage
 
-在 `user.db` 新增 `sessions`：
+Add `sessions` to `user.db`:
 
 ```sql
 CREATE TABLE IF NOT EXISTS sessions (
@@ -159,50 +164,61 @@ CREATE INDEX IF NOT EXISTS sessions_user_id_idx ON sessions(user_id);
 CREATE INDEX IF NOT EXISTS sessions_expires_at_idx ON sessions(expires_at);
 ```
 
-過期或已撤銷的 Session 應由定期清理工作移除。每位使用者可限制最多 10 個有效 Session；超過時撤銷最舊的 Session。
+A scheduled cleanup job must remove expired or revoked sessions. Each user may have at most 10 active sessions; when this limit is exceeded, the oldest session must be revoked.
 
 ## 6. Login Protection
 
-- Email 是第一版唯一登入識別欄位，採不區分大小寫比對。
-- bcrypt 驗證成功後才能建立 Session。
-- 連續登入失敗 5 次時，設定 `locked_until` 為目前時間加 15 分鐘。
-- 鎖定期間不得登入，即使密碼正確亦然。
-- 登入成功後將 `failed_login_count` 歸零並清除 `locked_until`。
-- 錯誤訊息統一為「email 或密碼錯誤」，不得透露帳號是否存在。
-- 登入與 Refresh 端點應依 IP 與帳號做 rate limiting。
-- 記錄登入成功、登入失敗、鎖定、Refresh 與登出事件，但不得記錄密碼或原始 Token。
+- Email is the only login identifier in the first version and is compared case-insensitively.
+- A session may be created only after successful bcrypt verification.
+- After five consecutive failed login attempts, set `locked_until` to 15 minutes after the current time.
+- Login is prohibited during the lock period, even with the correct password.
+- A successful login resets `failed_login_count` and clears `locked_until`.
+- Use the uniform error message `invalid email or password` without revealing whether an account exists.
+- Apply rate limiting to login and refresh endpoints by IP address and account.
+- Record successful login, failed login, lock, refresh, and logout events, but never record passwords or raw tokens.
 
 ## 7. Authorization
 
-登入驗證只確認「使用者是誰」，權限驗證決定「使用者可以做什麼」。兩者必須分開處理。
+Authentication establishes who the user is. Authorization determines what that user may do. These concerns must remain separate.
 
-第一階段可先要求所有業務 API 必須登入。下一階段加入 Permission Middleware：
+The first phase may require only authentication for business APIs. The next phase adds Permission Middleware. Every protected operation must then check both authentication and the corresponding permission:
 
-- `users.read`：讀取使用者
-- `users.manage`：新增、編輯及刪除使用者
+- `users.read`: view users
+- `users.manage`: create, edit, and delete users
+- `roles.read`: view roles and their permissions
+- `roles.manage`: create, edit, and delete custom roles
+- `roles.assign`: assign or remove user roles
+- `groups.read`: view groups and members
+- `groups.manage`: create, edit, and delete groups
+- `groups.assign`: add or remove group members
+- `permissions.read`: view permission definitions and assignments
+- `permissions.assign`: assign existing permissions to roles or groups
+- `permissions.manage`: create or edit permission definitions; reserved for the protected initial Administrator
 
-初始 `Administrator` role 的 `grants_all_permissions = 1`，可通過所有權限檢查。一般已登入使用者不應因為成功登入就能管理其他帳號。
+The initial `Admin` role has `grants_all_permissions = 1` and passes every current and future permission check. It is a protected default role that can belong only to the initial administrator; it cannot be assigned to another user, renamed, edited, deleted, or stripped of permissions. The initial administrator must permanently retain this role and capability and cannot be disabled or deleted. Authentication alone must not allow ordinary users to manage other accounts.
+
+A user with `permissions.assign` may configure permissions on roles or groups. Except for the initial Administrator, that user may assign only permissions the user currently possesses, preventing privilege escalation. Only the initial Administrator may use `permissions.manage` to create or modify permission definitions. Every role, group, and permission change must be recorded in the audit log.
 
 ## 8. Response Rules
 
 | Status | Meaning |
 | --- | --- |
-| `200 OK` | 登入、Refresh 或讀取成功 |
-| `204 No Content` | 登出成功 |
-| `400 Bad Request` | JSON 或輸入格式錯誤 |
-| `401 Unauthorized` | 未登入、Token 無效或帳密錯誤 |
-| `403 Forbidden` | 已登入但帳號停用、鎖定或權限不足 |
-| `429 Too Many Requests` | 登入嘗試過於頻繁 |
+| `200 OK` | Successful login, refresh, or read |
+| `204 No Content` | Successful logout |
+| `400 Bad Request` | Invalid JSON or input format |
+| `401 Unauthorized` | Missing authentication, invalid token, or invalid credentials |
+| `403 Forbidden` | Disabled or locked account, or insufficient permission |
+| `429 Too Many Requests` | Too many login attempts |
 
-Authentication response 應維持一致的 JSON 格式，且不得將內部 SQL、JWT 或 bcrypt 錯誤直接回傳給 Client。
+Authentication responses must use a consistent JSON format and must not expose internal SQL, JWT, or bcrypt errors to the client.
 
 ## 9. Implementation Order
 
-1. 建立 `sessions` schema 與 Session System Service。
-2. 實作登入、Refresh、登出與目前使用者 API。
-3. 建立 Authentication Middleware。
-4. 在 Router 中區分公開及受保護 API。
-5. 加入失敗次數、帳號鎖定與 Session 撤銷。
-6. 加入 Permission Middleware 與登入稽核紀錄。
+1. Create the `sessions` schema and Session System Service.
+2. Implement login, refresh, logout, and current-user APIs.
+3. Create Authentication Middleware.
+4. Separate public and protected APIs in the router.
+5. Add failed-attempt tracking, account locking, and session revocation.
+6. Add Permission Middleware and login audit records.
 
-目前已完成 Access Token、Refresh Token、Session rotation、登入鎖定及 Router Authentication Middleware；User CRUD API 已受登入保護。Permission Middleware、rate limiting 與登入稽核紀錄仍屬後續工作。
+Access tokens, refresh tokens, session rotation, login locking, and Router Authentication Middleware are implemented. User CRUD APIs require authentication. Permission Middleware, rate limiting, and login audit records remain future work.

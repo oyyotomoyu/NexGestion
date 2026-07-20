@@ -30,6 +30,11 @@ func InitRouter(router *http.ServeMux, users *system.UserService, auth *system.A
 	router.HandleFunc("PUT /api/users/{id}", protected(updateUser(users)))
 	router.HandleFunc("PATCH /api/users/{id}", protected(updateUser(users)))
 	router.HandleFunc("DELETE /api/users/{id}", protected(deleteUser(users)))
+	router.HandleFunc("GET /api/roles", protected(listRoles(users)))
+	router.HandleFunc("GET /api/roles/{id}", protected(getRole(users)))
+	router.HandleFunc("POST /api/roles", protected(createRole(users)))
+	router.HandleFunc("PATCH /api/roles/{id}", protected(updateRole(users)))
+	router.HandleFunc("DELETE /api/roles/{id}", protected(deleteRole(users)))
 	router.HandleFunc("GET /api/logs", protected(readLogs(logService)))
 
 	// Keep unknown API paths inside the API layer instead of falling through to
