@@ -102,9 +102,9 @@ func decodeJSON(w http.ResponseWriter, r *http.Request, destination any) error {
 
 func writeSystemError(w http.ResponseWriter, err error) {
 	switch {
-	case errors.Is(err, system.ErrUserNotFound), errors.Is(err, system.ErrRoleNotFound):
+	case errors.Is(err, system.ErrUserNotFound), errors.Is(err, system.ErrRoleNotFound), errors.Is(err, system.ErrGroupNotFound):
 		writeJSON(w, http.StatusNotFound, map[string]string{"error": err.Error()})
-	case errors.Is(err, system.ErrRoleAssigned):
+	case errors.Is(err, system.ErrRoleAssigned), errors.Is(err, system.ErrGroupInUse):
 		writeJSON(w, http.StatusConflict, map[string]string{"error": err.Error()})
 	case errors.Is(err, system.ErrRoleProtected), errors.Is(err, system.ErrAdminRequired):
 		writeJSON(w, http.StatusForbidden, map[string]string{"error": err.Error()})
@@ -112,7 +112,7 @@ func writeSystemError(w http.ResponseWriter, err error) {
 		writeJSON(w, http.StatusConflict, map[string]string{"error": "data already exists"})
 	case strings.Contains(err.Error(), "protected user"):
 		writeJSON(w, http.StatusForbidden, map[string]string{"error": err.Error()})
-	case strings.Contains(err.Error(), "required"), strings.Contains(err.Error(), "invalid"),
+	case errors.Is(err, system.ErrInvalidParent), strings.Contains(err.Error(), "required"), strings.Contains(err.Error(), "invalid"),
 		strings.Contains(err.Error(), "cannot be empty"), strings.Contains(err.Error(), "at least 12"):
 		writeJSON(w, http.StatusBadRequest, map[string]string{"error": err.Error()})
 	default:

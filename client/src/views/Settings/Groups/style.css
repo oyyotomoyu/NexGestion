@@ -1,0 +1,12 @@
+.groups-page, .groups-page > header { display: grid; gap: 24px; }
+.groups-page > header { gap: 6px; }
+.group-form { display: grid; gap: 16px; padding: 24px; border: 1px solid var(--color-border); border-radius: 10px; background: var(--color-surface); }
+.group-form__fields { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px; align-items: end; }
+.group-form__fields > div { display: grid; gap: 6px; }
+.group-form .nex-button { justify-self: start; }
+.group-table-wrap { overflow-x: auto; border: 1px solid var(--color-border); border-radius: 12px; background: var(--color-surface); }
+.group-table { width: 100%; min-width: 760px; border-collapse: collapse; }
+.group-table th, .group-table td { padding: 14px 16px; border-bottom: 1px solid var(--color-border); text-align: left; }
+.group-table th { background: var(--color-surface-muted); }
+.group-table tbody tr:last-child td { border-bottom: 0; }
+@media (max-width: 720px) { .group-form__fields { grid-template-columns: 1fr; } .group-form { padding: 18px; } }

@@ -7,6 +7,7 @@ import Login from "@/views/Login";
 import Settings from "@/views/Settings";
 import Roles from "@/views/Settings/Roles";
 import RoleDetail from "@/views/Settings/Roles/RoleDetail";
+import Groups from "@/views/Settings/Groups";
 
 const routes: RouteObject[] = [
   {
@@ -51,6 +52,10 @@ const routes: RouteObject[] = [
               {
                 path: "roles/:roleId",
                 element: <RoleDetail />,
+              },
+              {
+                path: "groups",
+                element: <Groups />,
               },
             ],
           },

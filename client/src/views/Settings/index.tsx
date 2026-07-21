@@ -22,6 +22,9 @@ export default function Settings() {
           <NavLink to="access-control/roles">
             <NexText as="span" color="inherit">{t("global.k_Settings_Roles_Title")}</NexText>
           </NavLink>
+          <NavLink to="access-control/groups">
+            <NexText as="span" color="inherit">{t("global.k_Settings_Groups_Title")}</NexText>
+          </NavLink>
         </nav>
         <div className="settings__content">
           <Outlet />

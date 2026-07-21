@@ -107,6 +107,12 @@ func userDatabaseSpec() DatabaseSpec {
 				created_at TEXT NOT NULL,
 				PRIMARY KEY (user_id, group_id)
 			)`,
+			`CREATE TABLE IF NOT EXISTS group_permissions (
+				group_id TEXT NOT NULL REFERENCES groups(id),
+				permission_id TEXT NOT NULL REFERENCES permissions(id),
+				created_at TEXT NOT NULL,
+				PRIMARY KEY (group_id, permission_id)
+			)`,
 			`CREATE TABLE IF NOT EXISTS sessions (
 				id TEXT PRIMARY KEY,
 				user_id TEXT NOT NULL REFERENCES users(id),

@@ -214,6 +214,69 @@ func TestRoleAPIRequiresAuthentication(t *testing.T) {
 	}
 }
 
+func TestGroupCRUDAPI(t *testing.T) {
+	router := testRouter(t)
+	accessToken, _ := loginForTest(t, router)
+
+	parentResponse := serveAuthorized(router, http.MethodPost, "/api/groups", []byte(`{"name":"Head Office","type":"branch"}`), accessToken)
+	if parentResponse.Code != http.StatusCreated {
+		t.Fatalf("create parent group: expected %d, got %d: %s", http.StatusCreated, parentResponse.Code, parentResponse.Body.String())
+	}
+	var parent system.Group
+	if err := json.NewDecoder(parentResponse.Body).Decode(&parent); err != nil {
+		t.Fatal(err)
+	}
+
+	childResponse := serveAuthorized(router, http.MethodPost, "/api/groups", []byte(`{"name":"Finance","type":"department","parent_group_id":"`+parent.ID+`"}`), accessToken)
+	if childResponse.Code != http.StatusCreated {
+		t.Fatalf("create child group: expected %d, got %d: %s", http.StatusCreated, childResponse.Code, childResponse.Body.String())
+	}
+	var child system.Group
+	if err := json.NewDecoder(childResponse.Body).Decode(&child); err != nil {
+		t.Fatal(err)
+	}
+	if child.ParentGroupID == nil || *child.ParentGroupID != parent.ID || child.Status != "active" || child.Permissions == nil {
+		t.Fatalf("unexpected child group: %+v", child)
+	}
+
+	listResponse := serveAuthorized(router, http.MethodGet, "/api/groups", nil, accessToken)
+	if listResponse.Code != http.StatusOK {
+		t.Fatalf("list groups: %s", listResponse.Body.String())
+	}
+	var list struct {
+		Groups []system.Group `json:"groups"`
+	}
+	if err := json.NewDecoder(listResponse.Body).Decode(&list); err != nil {
+		t.Fatal(err)
+	}
+	if len(list.Groups) != 2 {
+		t.Fatalf("expected 2 groups, got %d", len(list.Groups))
+	}
+
+	cycleResponse := serveAuthorized(router, http.MethodPatch, "/api/groups/"+parent.ID, []byte(`{"parent_group_id":"`+child.ID+`"}`), accessToken)
+	if cycleResponse.Code != http.StatusBadRequest {
+		t.Fatalf("cycle: expected %d, got %d: %s", http.StatusBadRequest, cycleResponse.Code, cycleResponse.Body.String())
+	}
+
+	inUseResponse := serveAuthorized(router, http.MethodDelete, "/api/groups/"+parent.ID, nil, accessToken)
+	if inUseResponse.Code != http.StatusConflict {
+		t.Fatalf("delete parent: expected %d, got %d: %s", http.StatusConflict, inUseResponse.Code, inUseResponse.Body.String())
+	}
+	if response := serveAuthorized(router, http.MethodDelete, "/api/groups/"+child.ID, nil, accessToken); response.Code != http.StatusNoContent {
+		t.Fatalf("delete child: expected %d, got %d: %s", http.StatusNoContent, response.Code, response.Body.String())
+	}
+	if response := serveAuthorized(router, http.MethodDelete, "/api/groups/"+parent.ID, nil, accessToken); response.Code != http.StatusNoContent {
+		t.Fatalf("delete parent: expected %d, got %d: %s", http.StatusNoContent, response.Code, response.Body.String())
+	}
+}
+
+func TestGroupAPIRequiresAuthentication(t *testing.T) {
+	response := serve(testRouter(t), http.MethodGet, "/api/groups", nil)
+	if response.Code != http.StatusUnauthorized {
+		t.Fatalf("expected %d, got %d", http.StatusUnauthorized, response.Code)
+	}
+}
+
 func TestLoginRefreshMeAndLogout(t *testing.T) {
 	router := testRouter(t)
 	accessToken, refreshCookie := loginForTest(t, router)
