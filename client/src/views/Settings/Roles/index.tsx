@@ -1,18 +1,19 @@
 import { useEffect, useState, type FormEvent } from "react";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 
 import { useAuth } from "@/auth/AuthProvider";
 import { NexButton } from "@/components/NexButton";
 import { NexInput } from "@/components/NexInput";
 import { NexText } from "@/components/NexText";
-import { createRole, listRoles } from "@/requests/roles";
+import { createRole, deleteRole, listRoles } from "@/requests/roles";
 import type { Role } from "@/requests/roles/types";
 
 import "./style.css";
 
 export default function Roles() {
   const { t } = useTranslation("ui");
+  const navigate = useNavigate();
   const { user } = useAuth();
   const canManage = user?.is_protected === true;
   const [roles, setRoles] = useState<Role[]>([]);
@@ -49,6 +50,20 @@ export default function Roles() {
       setRoles((current) => [...current, role].sort((a, b) => a.title.localeCompare(b.title)));
       setTitle("");
       setDescription("");
+    } catch {
+      setError(true);
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function remove(role: Role) {
+    if (!window.confirm(t("global.k_Settings_Roles_DeleteConfirm"))) return;
+    setSaving(true);
+    setError(false);
+    try {
+      await deleteRole(role.id);
+      setRoles((current) => current.filter((item) => item.id !== role.id));
     } catch {
       setError(true);
     } finally {
@@ -104,6 +119,7 @@ export default function Roles() {
                 <th scope="col"><NexText as="span" variant="label">{t("global.k_Settings_Roles_Label_Description")}</NexText></th>
                 <th scope="col"><NexText as="span" variant="label">{t("global.k_Settings_Roles_Label_Type")}</NexText></th>
                 <th scope="col"><NexText as="span" variant="label">{t("global.k_Settings_Roles_PermissionsTitle")}</NexText></th>
+                <th scope="col" className="role-table__actions-heading"><NexText as="span" variant="label">{t("global.k_Common_Actions")}</NexText></th>
               </tr>
             </thead>
             <tbody>
@@ -116,11 +132,13 @@ export default function Roles() {
                   </td>
                   <td><NexText as="span" color="muted">{role.description || t("global.k_Settings_Roles_NoDescription")}</NexText></td>
                   <td>
-                    <NexText as="span" color={role.is_system ? "primary" : "content"}>
-                      {role.is_system
-                        ? t("global.k_Settings_Roles_SystemBadge")
-                        : t("global.k_Settings_Roles_CustomBadge")}
-                    </NexText>
+                    <span className={`role-badge role-badge--${role.is_system ? "system" : "custom"}`}>
+                      <NexText as="span" variant="caption" color="inherit" weight={600}>
+                        {role.is_system
+                          ? t("global.k_Settings_Roles_SystemBadge")
+                          : t("global.k_Settings_Roles_CustomBadge")}
+                      </NexText>
+                    </span>
                   </td>
                   <td>
                     <NexText as="span" color="muted">
@@ -128,6 +146,34 @@ export default function Roles() {
                         ? t("global.k_Settings_Roles_AllPermissions")
                         : t("global.k_Settings_Roles_PermissionCount", { count: role.permissions.length })}
                     </NexText>
+                  </td>
+                  <td className="role-table__actions-cell">
+                    {canManage && !role.is_system ? (
+                      <div className="role-table__actions">
+                        <NexButton
+                          type="button"
+                          variant="secondary"
+                          size="compact"
+                          disabled={saving}
+                          onClick={() => navigate(encodeURIComponent(role.id))}
+                        >
+                          {t("global.k_Common_Edit")}
+                        </NexButton>
+                        <NexButton
+                          type="button"
+                          variant="danger"
+                          size="compact"
+                          disabled={saving}
+                          onClick={() => void remove(role)}
+                        >
+                          {t("global.k_Common_Delete")}
+                        </NexButton>
+                      </div>
+                    ) : (
+                      <NexText as="span" variant="caption" color="muted">
+                        {t("global.k_Settings_Roles_Protected")}
+                      </NexText>
+                    )}
                   </td>
                 </tr>
               ))}

@@ -1,6 +1,6 @@
 .roles-page {
   display: grid;
-  gap: 22px;
+  gap: 24px;
 }
 
 .roles-page__header,
@@ -12,7 +12,7 @@
 .role-form {
   display: grid;
   gap: 16px;
-  padding: 20px;
+  padding: 24px;
   border: 1px solid var(--color-border);
   border-radius: 10px;
   background: var(--color-surface);
@@ -31,7 +31,7 @@
 .role-table-wrap {
   overflow-x: auto;
   border: 1px solid var(--color-border);
-  border-radius: 10px;
+  border-radius: 12px;
   background: var(--color-surface);
 }
 
@@ -53,6 +53,11 @@
   background: var(--color-surface-muted);
 }
 
+.role-table__actions-heading,
+.role-table__actions-cell {
+  text-align: right;
+}
+
 .role-table tbody tr:last-child td {
   border-bottom: 0;
 }
@@ -65,6 +70,40 @@
   text-decoration: none;
 }
 
+.role-table__actions {
+  align-items: center;
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.role-detail__title-row {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.role-badge {
+  display: inline-flex;
+  align-items: center;
+  min-height: 26px;
+  padding: 3px 9px;
+  border: 1px solid var(--color-border);
+  border-radius: 999px;
+}
+
+.role-badge--system {
+  border-color: var(--color-primary);
+  color: var(--color-primary);
+  background: var(--color-primary-soft);
+}
+
+.role-badge--custom {
+  color: var(--color-secondary);
+  background: var(--color-secondary-soft);
+}
+
 .role-detail__actions {
   display: flex;
   gap: 10px;
@@ -74,5 +113,9 @@
 @media (max-width: 720px) {
   .role-form__fields {
     grid-template-columns: 1fr;
+  }
+
+  .role-form {
+    padding: 18px;
   }
 }

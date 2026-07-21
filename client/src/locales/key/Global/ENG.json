@@ -61,6 +61,7 @@
   "k_Settings_Roles_Title": "Roles",
   "k_Settings_Roles_Description": "Define access responsibilities and review assigned permissions.",
   "k_Settings_Roles_CreateTitle": "Create role",
+  "k_Settings_Roles_EditTitle": "Edit role details",
   "k_Settings_Roles_Label_Title": "Role title",
   "k_Settings_Roles_Label_Description": "Description",
   "k_Settings_Roles_Label_Type": "Type",
@@ -76,10 +77,13 @@
   "k_Settings_Roles_Back": "Back to roles",
   "k_Settings_Roles_DeleteConfirm": "Delete this role?",
   "k_Settings_Roles_AdminProtected": "The Admin system role is protected and cannot be changed.",
+  "k_Settings_Roles_Protected": "Protected",
   "k_Settings_Roles_PermissionsTitle": "Permissions",
   "k_Settings_Roles_NoPermissions": "No permissions are assigned.",
   "k_Common_Loading": "Loading...",
   "k_Common_Saving": "Saving...",
   "k_Common_Save": "Save",
+  "k_Common_Edit": "Edit",
+  "k_Common_Actions": "Actions",
   "k_Common_Delete": "Delete"
 }

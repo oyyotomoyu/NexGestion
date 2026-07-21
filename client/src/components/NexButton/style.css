@@ -35,6 +35,23 @@
   background: var(--color-secondary-soft);
 }
 
+.nex-button--danger {
+  border-color: var(--color-danger);
+  background: var(--color-danger);
+  color: var(--color-on-primary);
+}
+
+.nex-button--danger:hover:not(:disabled) {
+  border-color: var(--color-danger);
+  background: var(--color-danger);
+  box-shadow: 0 4px 12px var(--color-focus-ring);
+}
+
+.nex-button--compact {
+  min-height: 34px;
+  padding: 6px 12px;
+}
+
 .nex-button--full-width {
   width: 100%;
 }

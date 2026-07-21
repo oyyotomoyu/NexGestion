@@ -82,8 +82,17 @@ export default function RoleDetail() {
       </Link>
       <header className="roles-page__header">
         <div>
-          <NexText variant="heading">{role.title}</NexText>
-          <NexText color="muted">{role.id}</NexText>
+          <div className="role-detail__title-row">
+            <NexText variant="heading">{role.title}</NexText>
+            <span className={`role-badge role-badge--${role.is_system ? "system" : "custom"}`}>
+              <NexText as="span" variant="caption" color="inherit" weight={600}>
+                {role.is_system
+                  ? t("global.k_Settings_Roles_SystemBadge")
+                  : t("global.k_Settings_Roles_CustomBadge")}
+              </NexText>
+            </span>
+          </div>
+          <NexText variant="caption" color="muted">{role.id}</NexText>
         </div>
       </header>
 
@@ -91,6 +100,7 @@ export default function RoleDetail() {
 
       {canManage ? (
         <form className="role-form" onSubmit={(event) => void save(event)}>
+          <NexText variant="subheading">{t("global.k_Settings_Roles_EditTitle")}</NexText>
           <NexInput
             id="edit-role-title"
             label={t("global.k_Settings_Roles_Label_Title")}
@@ -108,7 +118,7 @@ export default function RoleDetail() {
             <NexButton type="submit" disabled={saving || !title.trim()}>
               {saving ? t("global.k_Common_Saving") : t("global.k_Common_Save")}
             </NexButton>
-            <NexButton type="button" variant="secondary" disabled={saving} onClick={() => void remove()}>
+            <NexButton type="button" variant="danger" disabled={saving} onClick={() => void remove()}>
               {t("global.k_Common_Delete")}
             </NexButton>
           </div>

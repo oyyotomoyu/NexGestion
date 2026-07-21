@@ -6,7 +6,8 @@ import "./style.css";
 
 interface NexButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
   children: ReactNode;
-  variant?: "primary" | "secondary";
+  variant?: "primary" | "secondary" | "danger";
+  size?: "default" | "compact";
   fullWidth?: boolean;
 }
 
@@ -14,12 +15,14 @@ export function NexButton({
   children,
   className = "",
   variant = "primary",
+  size = "default",
   fullWidth = false,
   ...props
 }: NexButtonProps) {
   const classes = [
     "nex-button",
     `nex-button--${variant}`,
+    `nex-button--${size}`,
     fullWidth ? "nex-button--full-width" : "",
     className,
   ]
