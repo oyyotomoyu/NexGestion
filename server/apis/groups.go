@@ -74,3 +74,42 @@ func deleteGroup(users *system.UserService) http.HandlerFunc {
 		w.WriteHeader(http.StatusNoContent)
 	}
 }
+
+func listGroupMembers(users *system.UserService) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		members, err := users.ListGroupMembers(r.Context(), authenticatedUserID(r), r.PathValue("id"))
+		if err != nil {
+			writeSystemError(w, err)
+			return
+		}
+		writeJSON(w, http.StatusOK, map[string]any{"members": members})
+	}
+}
+
+func setGroupMember(users *system.UserService) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		var input system.SetGroupMemberInput
+		if err := decodeJSON(w, r, &input); err != nil {
+			writeJSON(w, http.StatusBadRequest, map[string]string{"error": err.Error()})
+			return
+		}
+		member, err := users.SetGroupMember(r.Context(), authenticatedUserID(r), r.PathValue("id"), r.PathValue("userId"), input)
+		if err != nil {
+			writeSystemError(w, err)
+			return
+		}
+		recordRequestLog(r, "info", "updated group member "+r.PathValue("userId")+" in "+r.PathValue("id"))
+		writeJSON(w, http.StatusOK, member)
+	}
+}
+
+func removeGroupMember(users *system.UserService) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		if err := users.RemoveGroupMember(r.Context(), authenticatedUserID(r), r.PathValue("id"), r.PathValue("userId")); err != nil {
+			writeSystemError(w, err)
+			return
+		}
+		recordRequestLog(r, "info", "removed group member "+r.PathValue("userId")+" from "+r.PathValue("id"))
+		w.WriteHeader(http.StatusNoContent)
+	}
+}

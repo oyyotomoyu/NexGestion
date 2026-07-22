@@ -77,6 +77,18 @@ func userDatabaseSpec() DatabaseSpec {
 				description TEXT,
 				created_at TEXT NOT NULL
 			)`,
+			`INSERT OR IGNORE INTO permissions (id, permission_key, module, description, created_at) VALUES
+				('users.read', 'users.read', 'users', 'View users and employee profiles', '2026-01-01T00:00:00Z'),
+				('users.manage', 'users.manage', 'users', 'Manage users', '2026-01-01T00:00:00Z'),
+				('roles.read', 'roles.read', 'roles', 'View roles', '2026-01-01T00:00:00Z'),
+				('roles.manage', 'roles.manage', 'roles', 'Manage custom roles', '2026-01-01T00:00:00Z'),
+				('roles.assign', 'roles.assign', 'roles', 'Assign custom roles', '2026-01-01T00:00:00Z'),
+				('groups.read', 'groups.read', 'groups', 'View groups', '2026-01-01T00:00:00Z'),
+				('groups.manage', 'groups.manage', 'groups', 'Manage groups', '2026-01-01T00:00:00Z'),
+				('groups.assign', 'groups.assign', 'groups', 'Manage group memberships', '2026-01-01T00:00:00Z'),
+				('permissions.read', 'permissions.read', 'permissions', 'View permissions', '2026-01-01T00:00:00Z'),
+				('permissions.assign', 'permissions.assign', 'permissions', 'Assign existing permissions', '2026-01-01T00:00:00Z'),
+				('permissions.manage', 'permissions.manage', 'permissions', 'Manage permission definitions', '2026-01-01T00:00:00Z')`,
 			`CREATE TABLE IF NOT EXISTS user_roles (
 				user_id TEXT NOT NULL REFERENCES users(id),
 				role_id TEXT NOT NULL REFERENCES roles(id),
@@ -112,6 +124,12 @@ func userDatabaseSpec() DatabaseSpec {
 				permission_id TEXT NOT NULL REFERENCES permissions(id),
 				created_at TEXT NOT NULL,
 				PRIMARY KEY (group_id, permission_id)
+			)`,
+			`CREATE TABLE IF NOT EXISTS group_roles (
+				group_id TEXT NOT NULL REFERENCES groups(id),
+				role_id TEXT NOT NULL UNIQUE REFERENCES roles(id),
+				kind TEXT NOT NULL CHECK (kind IN ('manager', 'member')),
+				PRIMARY KEY (group_id, kind)
 			)`,
 			`CREATE TABLE IF NOT EXISTS sessions (
 				id TEXT PRIMARY KEY,

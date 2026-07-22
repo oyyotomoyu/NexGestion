@@ -6,7 +6,11 @@ import { useAuth } from "@/auth/AuthProvider";
 import { NexButton } from "@/components/NexButton";
 import { NexInput } from "@/components/NexInput";
 import { NexText } from "@/components/NexText";
-import { deleteRole, getRole, updateRole } from "@/requests/roles";
+import { deleteRole, getRole, listRoleUsers, setRoleUser, updateRole } from "@/requests/roles";
+import { listUsers } from "@/requests/users";
+import type { User } from "@/requests/users/types";
+import { listPermissions, setRolePermission } from "@/requests/permissions";
+import type { Permission } from "@/requests/users/types";
 import type { Role } from "@/requests/roles/types";
 
 export default function RoleDetail() {
@@ -20,7 +24,11 @@ export default function RoleDetail() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState(false);
-  const canManage = user?.is_protected === true && role?.is_system === false;
+  const [users,setUsers]=useState<User[]>([]); const [assignedUsers,setAssignedUsers]=useState<User[]>([]); const [permissions,setPermissions]=useState<Permission[]>([]);
+  const hasPermission=(key:string)=>user?.is_protected===true||user?.roles.some((item)=>item.grants_all_permissions||item.permissions.some((p)=>p.permission_key===key))===true;
+  const canManage = hasPermission("roles.manage") && role?.is_system === false;
+  const canAssign = hasPermission("roles.assign") && role?.is_system === false;
+  const canAssignPermissions = hasPermission("permissions.assign") && role?.is_system === false;
 
   useEffect(() => {
     let active = true;
@@ -41,6 +49,11 @@ export default function RoleDetail() {
       active = false;
     };
   }, [roleId]);
+
+  useEffect(()=>{Promise.all([listUsers(),listRoleUsers(roleId),listPermissions()]).then(([all,assigned,catalog])=>{setUsers(all);setAssignedUsers(assigned);setPermissions(catalog)}).catch(()=>setError(true));},[roleId]);
+
+  async function toggleUser(target:User,assign:boolean){setSaving(true);try{await setRoleUser(roleId,target.id,assign);setAssignedUsers((items)=>assign?[...items,target]:items.filter((item)=>item.id!==target.id));}catch{setError(true)}finally{setSaving(false)}}
+  async function togglePermission(permission:Permission,grant:boolean){setSaving(true);try{await setRolePermission(roleId,permission.id,grant);const refreshed=await getRole(roleId);setRole(refreshed)}catch{setError(true)}finally{setSaving(false)}}
 
   async function save(event: FormEvent) {
     event.preventDefault();
@@ -141,7 +154,9 @@ export default function RoleDetail() {
         ) : (
           <NexText color="muted">{t("global.k_Settings_Roles_NoPermissions")}</NexText>
         )}
+        {canAssignPermissions ? permissions.map((permission)=>{const granted=role.permissions.some((item)=>item.id===permission.id);return <label key={permission.id}><input type="checkbox" checked={granted} disabled={saving||!hasPermission(permission.permission_key)} onChange={(event)=>void togglePermission(permission,event.target.checked)}/> {permission.permission_key}</label>}) : null}
       </section>
+      {canAssign ? <section className="role-form"><NexText variant="subheading">{t("global.k_Settings_Roles_AssignedUsers")}</NexText>{users.map((target)=>{const assigned=assignedUsers.some((item)=>item.id===target.id);return <label key={target.id}><input type="checkbox" checked={assigned} disabled={saving} onChange={(event)=>void toggleUser(target,event.target.checked)}/> {target.display_name} ({target.email})</label>})}</section>:null}
     </section>
   );
 }

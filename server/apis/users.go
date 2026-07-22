@@ -102,11 +102,11 @@ func decodeJSON(w http.ResponseWriter, r *http.Request, destination any) error {
 
 func writeSystemError(w http.ResponseWriter, err error) {
 	switch {
-	case errors.Is(err, system.ErrUserNotFound), errors.Is(err, system.ErrRoleNotFound), errors.Is(err, system.ErrGroupNotFound):
+	case errors.Is(err, system.ErrUserNotFound), errors.Is(err, system.ErrRoleNotFound), errors.Is(err, system.ErrGroupNotFound), errors.Is(err, system.ErrMemberNotFound), errors.Is(err, system.ErrPermissionNotFound):
 		writeJSON(w, http.StatusNotFound, map[string]string{"error": err.Error()})
 	case errors.Is(err, system.ErrRoleAssigned), errors.Is(err, system.ErrGroupInUse):
 		writeJSON(w, http.StatusConflict, map[string]string{"error": err.Error()})
-	case errors.Is(err, system.ErrRoleProtected), errors.Is(err, system.ErrAdminRequired):
+	case errors.Is(err, system.ErrRoleProtected), errors.Is(err, system.ErrAdminRequired), errors.Is(err, system.ErrGroupAccess), errors.Is(err, system.ErrPermissionDenied):
 		writeJSON(w, http.StatusForbidden, map[string]string{"error": err.Error()})
 	case strings.Contains(err.Error(), "UNIQUE constraint failed"):
 		writeJSON(w, http.StatusConflict, map[string]string{"error": "data already exists"})

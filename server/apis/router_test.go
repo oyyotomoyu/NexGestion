@@ -252,6 +252,31 @@ func TestGroupCRUDAPI(t *testing.T) {
 	if len(list.Groups) != 2 {
 		t.Fatalf("expected 2 groups, got %d", len(list.Groups))
 	}
+	grantResponse := serveAuthorized(router, http.MethodPut, "/api/groups/"+child.ID+"/permissions/groups.read", nil, accessToken)
+	if grantResponse.Code != http.StatusNoContent {
+		t.Fatalf("grant group permission: %d %s", grantResponse.Code, grantResponse.Body.String())
+	}
+	renameResponse := serveAuthorized(router, http.MethodPatch, "/api/groups/"+child.ID, []byte(`{"name":"Accounting"}`), accessToken)
+	if renameResponse.Code != http.StatusOK {
+		t.Fatalf("rename group: %d %s", renameResponse.Code, renameResponse.Body.String())
+	}
+	var renamed system.Group
+	if err := json.NewDecoder(renameResponse.Body).Decode(&renamed); err != nil {
+		t.Fatal(err)
+	}
+	if len(renamed.Permissions) != 1 || renamed.Permissions[0].PermissionKey != "groups.read" {
+		t.Fatalf("group permission not returned: %+v", renamed.Permissions)
+	}
+	for roleID, want := range map[string]string{renamed.ManagerRoleID: "Accounting Manager", renamed.MemberRoleID: "Accounting Member"} {
+		response := serveAuthorized(router, http.MethodGet, "/api/roles/"+roleID, nil, accessToken)
+		var generated system.Role
+		if err := json.NewDecoder(response.Body).Decode(&generated); err != nil {
+			t.Fatal(err)
+		}
+		if generated.Title != want {
+			t.Fatalf("generated role title: got %q want %q", generated.Title, want)
+		}
+	}
 
 	cycleResponse := serveAuthorized(router, http.MethodPatch, "/api/groups/"+parent.ID, []byte(`{"parent_group_id":"`+child.ID+`"}`), accessToken)
 	if cycleResponse.Code != http.StatusBadRequest {
@@ -274,6 +299,167 @@ func TestGroupAPIRequiresAuthentication(t *testing.T) {
 	response := serve(testRouter(t), http.MethodGet, "/api/groups", nil)
 	if response.Code != http.StatusUnauthorized {
 		t.Fatalf("expected %d, got %d", http.StatusUnauthorized, response.Code)
+	}
+}
+
+func TestPermissionGrantsDelegateRoleManagement(t *testing.T) {
+	router := testRouter(t)
+	adminToken, _ := loginForTest(t, router)
+	userResponse := serveAuthorized(router, http.MethodPost, "/api/users", []byte(`{"display_name":"Role Operator","email":"operator@example.com","password":"a-secure-user-password"}`), adminToken)
+	var operator system.User
+	if err := json.NewDecoder(userResponse.Body).Decode(&operator); err != nil {
+		t.Fatal(err)
+	}
+	roleResponse := serveAuthorized(router, http.MethodPost, "/api/roles", []byte(`{"title":"Role Operator"}`), adminToken)
+	var role system.Role
+	if err := json.NewDecoder(roleResponse.Body).Decode(&role); err != nil {
+		t.Fatal(err)
+	}
+	for _, permissionID := range []string{"roles.manage", "roles.assign", "permissions.assign"} {
+		response := serveAuthorized(router, http.MethodPut, "/api/roles/"+role.ID+"/permissions/"+permissionID, nil, adminToken)
+		if response.Code != http.StatusNoContent {
+			t.Fatalf("grant %s: %d %s", permissionID, response.Code, response.Body.String())
+		}
+	}
+	assign := serveAuthorized(router, http.MethodPut, "/api/roles/"+role.ID+"/users/"+operator.ID, nil, adminToken)
+	if assign.Code != http.StatusNoContent {
+		t.Fatalf("assign delegated role: %d %s", assign.Code, assign.Body.String())
+	}
+	loginResponse := serve(router, http.MethodPost, "/api/auth/login", []byte(`{"email":"operator@example.com","password":"a-secure-user-password"}`))
+	var login struct {
+		AccessToken string `json:"access_token"`
+	}
+	json.NewDecoder(loginResponse.Body).Decode(&login)
+	created := serveAuthorized(router, http.MethodPost, "/api/roles", []byte(`{"title":"Delegated Role"}`), login.AccessToken)
+	if created.Code != http.StatusCreated {
+		t.Fatalf("delegated role create: %d %s", created.Code, created.Body.String())
+	}
+	var delegated system.Role
+	json.NewDecoder(created.Body).Decode(&delegated)
+	// The operator cannot grant a permission they do not possess.
+	denied := serveAuthorized(router, http.MethodPut, "/api/roles/"+delegated.ID+"/permissions/users.manage", nil, login.AccessToken)
+	if denied.Code != http.StatusForbidden {
+		t.Fatalf("privilege escalation: expected %d, got %d", http.StatusForbidden, denied.Code)
+	}
+	deleted := serveAuthorized(router, http.MethodDelete, "/api/roles/"+role.ID, nil, adminToken)
+	if deleted.Code != http.StatusNoContent {
+		t.Fatalf("delete assigned role: %d %s", deleted.Code, deleted.Body.String())
+	}
+	operatorResponse := serveAuthorized(router, http.MethodGet, "/api/users/"+operator.ID, nil, adminToken)
+	var remaining system.User
+	if err := json.NewDecoder(operatorResponse.Body).Decode(&remaining); err != nil {
+		t.Fatal(err)
+	}
+	for _, assigned := range remaining.Roles {
+		if assigned.ID == role.ID {
+			t.Fatal("deleted custom role remained assigned")
+		}
+	}
+}
+
+func TestPermissionCatalogManagement(t *testing.T) {
+	router := testRouter(t)
+	token, _ := loginForTest(t, router)
+	created := serveAuthorized(router, http.MethodPost, "/api/permissions", []byte(`{"permission_key":"inventory.write","module":"inventory","description":"Write inventory"}`), token)
+	if created.Code != http.StatusCreated {
+		t.Fatalf("create permission: %d %s", created.Code, created.Body.String())
+	}
+	var permission system.Permission
+	if err := json.NewDecoder(created.Body).Decode(&permission); err != nil {
+		t.Fatal(err)
+	}
+	updated := serveAuthorized(router, http.MethodPatch, "/api/permissions/"+permission.ID, []byte(`{"description":"Manage inventory"}`), token)
+	if updated.Code != http.StatusOK {
+		t.Fatalf("update permission: %d %s", updated.Code, updated.Body.String())
+	}
+	listed := serveAuthorized(router, http.MethodGet, "/api/permissions", nil, token)
+	if listed.Code != http.StatusOK {
+		t.Fatalf("list permissions: %d", listed.Code)
+	}
+}
+
+func TestGroupCreatesRolesAndManagerCanManageOwnMembers(t *testing.T) {
+	router := testRouter(t)
+	adminToken, _ := loginForTest(t, router)
+	createUser := func(name, email string) system.User {
+		response := serveAuthorized(router, http.MethodPost, "/api/users", []byte(`{"display_name":"`+name+`","email":"`+email+`","password":"a-secure-user-password"}`), adminToken)
+		if response.Code != http.StatusCreated {
+			t.Fatalf("create user: %s", response.Body.String())
+		}
+		var user system.User
+		if err := json.NewDecoder(response.Body).Decode(&user); err != nil {
+			t.Fatal(err)
+		}
+		return user
+	}
+	manager := createUser("Group Manager", "manager@example.com")
+	member := createUser("Group Member", "member@example.com")
+
+	groupResponse := serveAuthorized(router, http.MethodPost, "/api/groups", []byte(`{"name":"North Branch","type":"branch"}`), adminToken)
+	var group system.Group
+	if err := json.NewDecoder(groupResponse.Body).Decode(&group); err != nil {
+		t.Fatal(err)
+	}
+	if group.ManagerRoleID == "" || group.MemberRoleID == "" {
+		t.Fatalf("expected generated group roles: %+v", group)
+	}
+	otherResponse := serveAuthorized(router, http.MethodPost, "/api/groups", []byte(`{"name":"South Branch","type":"branch"}`), adminToken)
+	var other system.Group
+	if err := json.NewDecoder(otherResponse.Body).Decode(&other); err != nil {
+		t.Fatal(err)
+	}
+
+	assign := serveAuthorized(router, http.MethodPut, "/api/groups/"+group.ID+"/members/"+manager.ID, []byte(`{"role":"manager","title":"Branch Manager"}`), adminToken)
+	if assign.Code != http.StatusOK {
+		t.Fatalf("assign manager: expected %d, got %d: %s", http.StatusOK, assign.Code, assign.Body.String())
+	}
+
+	loginResponse := serve(router, http.MethodPost, "/api/auth/login", []byte(`{"email":"manager@example.com","password":"a-secure-user-password"}`))
+	var login struct {
+		AccessToken string `json:"access_token"`
+	}
+	if err := json.NewDecoder(loginResponse.Body).Decode(&login); err != nil {
+		t.Fatal(err)
+	}
+	addMember := serveAuthorized(router, http.MethodPut, "/api/groups/"+group.ID+"/members/"+member.ID, []byte(`{"role":"member"}`), login.AccessToken)
+	if addMember.Code != http.StatusOK {
+		t.Fatalf("manager add member: expected %d, got %d: %s", http.StatusOK, addMember.Code, addMember.Body.String())
+	}
+	denied := serveAuthorized(router, http.MethodPut, "/api/groups/"+other.ID+"/members/"+member.ID, []byte(`{"role":"member"}`), login.AccessToken)
+	if denied.Code != http.StatusForbidden {
+		t.Fatalf("manage other group: expected %d, got %d: %s", http.StatusForbidden, denied.Code, denied.Body.String())
+	}
+	list := serveAuthorized(router, http.MethodGet, "/api/groups/"+group.ID+"/members", nil, login.AccessToken)
+	if list.Code != http.StatusOK {
+		t.Fatalf("list own members: %s", list.Body.String())
+	}
+	var members struct {
+		Members []system.GroupMember `json:"members"`
+	}
+	if err := json.NewDecoder(list.Body).Decode(&members); err != nil {
+		t.Fatal(err)
+	}
+	if len(members.Members) != 2 {
+		t.Fatalf("expected manager and member, got %d", len(members.Members))
+	}
+	deleted := serveAuthorized(router, http.MethodDelete, "/api/groups/"+group.ID, nil, adminToken)
+	if deleted.Code != http.StatusNoContent {
+		t.Fatalf("delete group with members: expected %d, got %d: %s", http.StatusNoContent, deleted.Code, deleted.Body.String())
+	}
+	userResponse := serveAuthorized(router, http.MethodGet, "/api/users/"+manager.ID, nil, adminToken)
+	var remaining system.User
+	if err := json.NewDecoder(userResponse.Body).Decode(&remaining); err != nil {
+		t.Fatal(err)
+	}
+	for _, assignedRole := range remaining.Roles {
+		if assignedRole.ID == group.ManagerRoleID || assignedRole.ID == group.MemberRoleID {
+			t.Fatal("generated group role remained assigned after group deletion")
+		}
+	}
+	for _, assignedGroup := range remaining.Groups {
+		if assignedGroup.ID == group.ID {
+			t.Fatal("group membership remained after group deletion")
+		}
 	}
 }
 

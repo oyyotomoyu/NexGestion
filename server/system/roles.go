@@ -117,8 +117,8 @@ func getRole(ctx context.Context, db *sql.DB, id string) (*Role, error) {
 }
 
 func (s *UserService) CreateRole(ctx context.Context, actorUserID string, input CreateRoleInput) (*Role, error) {
-	if !IsInitialAdministrator(actorUserID) {
-		return nil, ErrAdminRequired
+	if !s.HasPermission(ctx, actorUserID, "roles.manage") {
+		return nil, ErrPermissionDenied
 	}
 	title, err := normalizeRoleTitle(input.Title)
 	if err != nil {
@@ -141,8 +141,8 @@ func (s *UserService) CreateRole(ctx context.Context, actorUserID string, input 
 }
 
 func (s *UserService) UpdateRole(ctx context.Context, actorUserID, id string, input UpdateRoleInput) (*Role, error) {
-	if !IsInitialAdministrator(actorUserID) {
-		return nil, ErrAdminRequired
+	if !s.HasPermission(ctx, actorUserID, "roles.manage") {
+		return nil, ErrPermissionDenied
 	}
 	if id == adminRoleID {
 		return nil, ErrRoleProtected
@@ -153,8 +153,12 @@ func (s *UserService) UpdateRole(ctx context.Context, actorUserID, id string, in
 		return nil, err
 	}
 	defer db.Close()
-	if _, err := getRole(ctx, db, id); err != nil {
+	role, err := getRole(ctx, db, id)
+	if err != nil {
 		return nil, err
+	}
+	if role.IsSystem {
+		return nil, ErrRoleProtected
 	}
 
 	sets := []string{}
@@ -183,8 +187,8 @@ func (s *UserService) UpdateRole(ctx context.Context, actorUserID, id string, in
 }
 
 func (s *UserService) DeleteRole(ctx context.Context, actorUserID, id string) error {
-	if !IsInitialAdministrator(actorUserID) {
-		return ErrAdminRequired
+	if !s.HasPermission(ctx, actorUserID, "roles.manage") {
+		return ErrPermissionDenied
 	}
 	if id == adminRoleID {
 		return ErrRoleProtected
@@ -194,24 +198,28 @@ func (s *UserService) DeleteRole(ctx context.Context, actorUserID, id string) er
 		return err
 	}
 	defer db.Close()
+	role, err := getRole(ctx, db, id)
+	if err != nil {
+		return err
+	}
+	if role.IsSystem {
+		return ErrRoleProtected
+	}
 
 	tx, err := db.BeginTx(ctx, nil)
 	if err != nil {
 		return err
 	}
 	defer tx.Rollback()
-	var exists, assignments int
+	var exists int
 	if err := tx.QueryRowContext(ctx, `SELECT COUNT(*) FROM roles WHERE id = ?`, id).Scan(&exists); err != nil {
 		return err
 	}
 	if exists == 0 {
 		return ErrRoleNotFound
 	}
-	if err := tx.QueryRowContext(ctx, `SELECT COUNT(*) FROM user_roles WHERE role_id = ?`, id).Scan(&assignments); err != nil {
+	if _, err := tx.ExecContext(ctx, `DELETE FROM user_roles WHERE role_id = ?`, id); err != nil {
 		return err
-	}
-	if assignments != 0 {
-		return ErrRoleAssigned
 	}
 	if _, err := tx.ExecContext(ctx, `DELETE FROM role_permissions WHERE role_id = ?`, id); err != nil {
 		return err

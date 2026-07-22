@@ -10,7 +10,7 @@ All UserSystem data is stored in a dedicated SQLite database named `user.db`. Ot
 
 Each NexGestion installation manages exactly one organization. That organization may contain multiple departments, branches, or teams represented by groups.
 
-This document defines the initial data model direction. It is not yet a finalized database migration.
+This document defines the implemented core data model. Focused API and lifecycle contracts are maintained in the linked subsystem documents.
 
 ## 2. User And Employee Are Different Concepts
 
@@ -70,6 +70,8 @@ Sensitive HR data such as salary, bank account, identity document number, home a
 
 ### 3.3 Roles
 
+The detailed implemented contract is documented in [`role-system.md`](./role-system.md).
+
 A role is a named collection of permissions that can be assigned to users. Every role must have at least:
 
 | Field | Type | Required | Description |
@@ -86,7 +88,7 @@ The server generates `roles.id`; clients must not submit or replace it. A role t
 
 UserSystem seeds one default system role with the title `Admin`. It is the highest-privilege role and has `is_system = true` and `grants_all_permissions = true`. The role is assigned only to the protected initial administrator. It must never be assigned to another user, renamed, edited, or deleted. Its permissions cannot be removed or overridden.
 
-The protected administrator can create, read, edit, and delete custom roles. Other users may perform those operations only when their effective permissions authorize them. A custom role cannot set `is_system` or `grants_all_permissions`; those fields are controlled by the system. A custom role that is still assigned to users cannot be deleted. Its assignments must be removed first.
+The protected administrator can create, read, edit, and delete custom roles. Other users may perform those operations only when their effective permissions authorize them. A custom role cannot set `is_system` or `grants_all_permissions`; those fields are controlled by the system. Deleting a custom role atomically removes its user assignments and permission grants without deleting affected users.
 
 Role APIs:
 
@@ -96,7 +98,7 @@ Role APIs:
 | `GET` | `/api/roles/{id}` | `roles.read` | Read one role by immutable role ID |
 | `POST` | `/api/roles` | `roles.manage` | Create a custom role |
 | `PATCH` | `/api/roles/{id}` | `roles.manage` | Edit a custom role |
-| `DELETE` | `/api/roles/{id}` | `roles.manage` | Delete an unassigned custom role |
+| `DELETE` | `/api/roles/{id}` | `roles.manage` | Delete a custom role and its assignments |
 
 The protected administrator passes every permission check. Role list and detail responses include the role's assigned permission definitions. `POST` and `PATCH` accept role metadata; permission grants are managed separately through permission-assignment operations requiring `permissions.assign`.
 
@@ -122,7 +124,7 @@ Example role response:
 }
 ```
 
-Creating a role returns `201 Created`. Invalid input returns `400 Bad Request`, missing authentication returns `401 Unauthorized`, insufficient permission returns `403 Forbidden`, an unknown role ID returns `404 Not Found`, and a duplicate title or deletion of an assigned role returns `409 Conflict`.
+Creating a role returns `201 Created`. Invalid input returns `400 Bad Request`, missing authentication returns `401 Unauthorized`, insufficient permission returns `403 Forbidden`, an unknown role ID returns `404 Not Found`, and a duplicate title returns `409 Conflict`. Deleting a custom role removes its user assignments and permission grants atomically without deleting affected users.
 
 ### 3.4 Permissions
 
@@ -133,6 +135,7 @@ Roles and permissions are many-to-many relationships rather than columns on `use
 - `user_roles`: assigns one or more roles to a user
 - `role_permissions`: grants permissions to a role
 - `group_permissions`: grants permissions to every active member of a group
+- `group_roles`: links each group to its generated Manager and Member system roles
 
 The system must seed a default permission catalog. The initial catalog contains at least:
 
@@ -160,11 +163,16 @@ The initial protected administrator's `Admin` role has `grants_all_permissions =
 
 ### 3.5 Groups
 
+The detailed implemented contract is documented in [`group-system.md`](./group-system.md).
+
 Groups primarily represent organization membership, such as a department, branch, store, project team, or working group. A group may also receive explicit permission grants through `group_permissions`.
 
 - `groups`: group identity, name, type, parent group, and status
 - `user_groups`: user membership, optional title, and membership dates
 - `group_permissions`: explicit permissions inherited by active group members
+- `group_roles`: the protected Manager and Member roles created with every group
+
+Creating a group automatically creates `<Group Name> Manager` and `<Group Name> Member` roles. The protected administrator may manage every group. A user assigned the Manager role for a group may manage membership only in that group; the role grants no authority over other groups.
 
 A user may belong to multiple groups. Group names or group types do not implicitly grant access; only records in `group_permissions` do. Parent groups do not automatically inherit permissions from, or grant permissions to, child groups unless a future specification explicitly introduces inheritance.
 

@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState, type FormEvent } from "react";
 import { useTranslation } from "react-i18next";
+import { Link } from "react-router-dom";
 
 import { useAuth } from "@/auth/AuthProvider";
 import { NexButton } from "@/components/NexButton";
@@ -14,7 +15,7 @@ import "./style.css";
 export default function Groups() {
   const { t } = useTranslation("ui");
   const { user } = useAuth();
-  const canManage = user?.is_protected === true;
+  const canManage = user?.is_protected === true || user?.roles.some((role) => role.grants_all_permissions || role.permissions.some((permission) => permission.permission_key === "groups.manage")) === true;
   const [groups, setGroups] = useState<Group[]>([]);
   const [name, setName] = useState("");
   const [type, setType] = useState("");
@@ -72,7 +73,7 @@ export default function Groups() {
     {groups.length ? <div className="group-table-wrap"><table className="group-table"><thead><tr>
       <th>{t("global.k_Settings_Groups_Label_Name")}</th><th>{t("global.k_Settings_Groups_Label_Type")}</th><th>{t("global.k_Settings_Groups_Label_Parent")}</th><th>{t("global.k_Settings_Groups_Label_Status")}</th><th>{t("global.k_Settings_Groups_Label_Members")}</th><th>{t("global.k_Common_Actions")}</th>
     </tr></thead><tbody>{groups.map((group) => <tr key={group.id}>
-      <td><NexText as="span" weight={600}>{group.name}</NexText></td><td>{group.type}</td><td>{group.parent_group_id ? names.get(group.parent_group_id) || "-" : "-"}</td><td>{group.status}</td><td>{group.member_count}</td>
+      <td>{canManage || user?.roles.some((role)=>role.id===group.manager_role_id)?<Link to={encodeURIComponent(group.id)}><NexText as="span" weight={600} color="primary">{group.name}</NexText></Link>:<NexText as="span" weight={600}>{group.name}</NexText>}</td><td>{group.type}</td><td>{group.parent_group_id ? names.get(group.parent_group_id) || "-" : "-"}</td><td>{group.status}</td><td>{group.member_count}</td>
       <td>{canManage ? <NexButton type="button" variant="danger" size="compact" disabled={saving} onClick={() => void remove(group)}>{t("global.k_Common_Delete")}</NexButton> : null}</td>
     </tr>)}</tbody></table></div> : null}
   </section>;

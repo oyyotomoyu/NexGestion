@@ -15,7 +15,7 @@ export default function Roles() {
   const { t } = useTranslation("ui");
   const navigate = useNavigate();
   const { user } = useAuth();
-  const canManage = user?.is_protected === true;
+  const canManage = user?.is_protected === true || user?.roles.some((role) => role.grants_all_permissions || role.permissions.some((permission) => permission.permission_key === "roles.manage")) === true;
   const [roles, setRoles] = useState<Role[]>([]);
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");

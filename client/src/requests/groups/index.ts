@@ -1,5 +1,5 @@
 import { request } from "@/requests/core/client";
-import type { CreateGroupInput, Group, UpdateGroupInput } from "./types";
+import type { CreateGroupInput, Group, GroupMember, SetGroupMemberInput, UpdateGroupInput } from "./types";
 
 let mockGroups: Group[] = [];
 
@@ -9,6 +9,14 @@ export async function listGroups() {
   return response.groups;
 }
 
+export function getGroup(id: string) {
+  if (import.meta.env.DEV) {
+    const group = mockGroups.find((item) => item.id === id);
+    return group ? Promise.resolve({ ...group }) : Promise.reject(new Error("Group not found"));
+  }
+  return request<Group>(`/api/groups/${encodeURIComponent(id)}`);
+}
+
 export function createGroup(input: CreateGroupInput) {
   if (import.meta.env.DEV) {
     const now = new Date().toISOString();
@@ -16,6 +24,7 @@ export function createGroup(input: CreateGroupInput) {
       id: crypto.randomUUID(), name: input.name.trim(), type: input.type.trim(),
       parent_group_id: input.parent_group_id || null, status: input.status || "active",
       created_at: now, updated_at: now, member_count: 0, permissions: [],
+      manager_role_id: crypto.randomUUID(), member_role_id: crypto.randomUUID(),
     };
     mockGroups = [...mockGroups, group];
     return Promise.resolve({ ...group });
@@ -30,4 +39,19 @@ export function updateGroup(id: string, input: UpdateGroupInput) {
 export function deleteGroup(id: string) {
   if (import.meta.env.DEV) { mockGroups = mockGroups.filter((group) => group.id !== id); return Promise.resolve(); }
   return request<void>(`/api/groups/${encodeURIComponent(id)}`, { method: "DELETE" });
+}
+
+export async function listGroupMembers(id: string) {
+  const response = await request<{ members: GroupMember[] }>(`/api/groups/${encodeURIComponent(id)}/members`);
+  return response.members;
+}
+
+export function setGroupMember(groupId: string, userId: string, input: SetGroupMemberInput) {
+  return request<GroupMember>(`/api/groups/${encodeURIComponent(groupId)}/members/${encodeURIComponent(userId)}`, {
+    method: "PUT", body: JSON.stringify(input),
+  });
+}
+
+export function removeGroupMember(groupId: string, userId: string) {
+  return request<void>(`/api/groups/${encodeURIComponent(groupId)}/members/${encodeURIComponent(userId)}`, { method: "DELETE" });
 }
