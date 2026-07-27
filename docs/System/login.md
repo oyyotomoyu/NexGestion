@@ -192,12 +192,12 @@ The first phase may require only authentication for business APIs. The next phas
 - `groups.manage`: create, edit, and delete groups
 - `groups.assign`: add or remove group members
 - `permissions.read`: view permission definitions and assignments
-- `permissions.assign`: assign existing permissions to roles or groups
-- `permissions.manage`: create or edit permission definitions; reserved for the protected initial Administrator
+- `permissions.assign`: assign existing permissions to custom roles; assignment is reserved for the protected initial Administrator
+- `logs.read`: view request and audit logs
 
 The initial `Admin` role has `grants_all_permissions = 1` and passes every current and future permission check. It is a protected default role that can belong only to the initial administrator; it cannot be assigned to another user, renamed, edited, deleted, or stripped of permissions. The initial administrator must permanently retain this role and capability and cannot be disabled or deleted. Authentication alone must not allow ordinary users to manage other accounts.
 
-A user with `permissions.assign` may configure permissions on roles or groups. Except for the initial Administrator, that user may assign only permissions the user currently possesses, preventing privilege escalation. Only the initial Administrator may use `permissions.manage` to create or modify permission definitions. Every role, group, and permission change must be recorded in the audit log.
+Only the initial Administrator may change the permissions granted by a role. A delegated role manager may still read assigned permissions. Permission definitions come from `config/permission.json`, and every protected route declares one of those keys. Every role and permission-assignment change must be recorded in the audit log.
 
 ## 8. Response Rules
 

@@ -8,8 +8,6 @@ import { NexInput } from "@/components/NexInput";
 import { NexSelect } from "@/components/NexSelect";
 import { NexText } from "@/components/NexText";
 import { getGroup, listGroupMembers, listGroups, removeGroupMember, setGroupMember, updateGroup } from "@/requests/groups";
-import { listPermissions, setGroupPermission } from "@/requests/permissions";
-import type { Permission } from "@/requests/users/types";
 import type { Group, GroupMember, GroupMemberRole } from "@/requests/groups/types";
 import { listUsers } from "@/requests/users";
 import type { User } from "@/requests/users/types";
@@ -26,14 +24,14 @@ export default function GroupDetail() {
   const [title, setTitle] = useState("");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState(false);
-  const [name,setName]=useState(""); const [type,setType]=useState(""); const [status,setStatus]=useState<"active"|"inactive">("active"); const [permissions,setPermissions]=useState<Permission[]>([]);
+  const [name,setName]=useState(""); const [type,setType]=useState(""); const [status,setStatus]=useState<"active"|"inactive">("active");
   const [parent,setParent]=useState(""); const [allGroups,setAllGroups]=useState<Group[]>([]);
   const hasPermission=(key:string)=>user?.is_protected===true||user?.roles.some((item)=>item.grants_all_permissions||item.permissions.some((permission)=>permission.permission_key===key))===true;
-  const canEdit=hasPermission("groups.manage"); const canAssignPermissions=hasPermission("permissions.assign");
-  const canManageMembers=hasPermission("groups.assign")||user?.roles.some((item)=>item.id===group?.manager_role_id)===true;
+  const canEdit=hasPermission("groups.manage");
+  const canManageMembers=hasPermission("groups.assign");
 
   useEffect(() => {
-    getGroup(groupId).then(async(groupResult)=>{setGroup(groupResult);setName(groupResult.name);setType(groupResult.type);setStatus(groupResult.status);setParent(groupResult.parent_group_id||"");const manageMembers=hasPermission("groups.assign")||user?.roles.some((item)=>item.id===groupResult.manager_role_id)===true;const [userResult,catalog,memberResult,groupsResult]=await Promise.all([listUsers(),listPermissions(),manageMembers?listGroupMembers(groupId):Promise.resolve([]),listGroups()]);setUsers(userResult);setPermissions(catalog);setMembers(memberResult);setAllGroups(groupsResult)}).catch(() => setError(true));
+    getGroup(groupId).then(async(groupResult)=>{setGroup(groupResult);setName(groupResult.name);setType(groupResult.type);setStatus(groupResult.status);setParent(groupResult.parent_group_id||"");const manageMembers=hasPermission("groups.assign");const [userResult,memberResult,groupsResult]=await Promise.all([listUsers(),manageMembers?listGroupMembers(groupId):Promise.resolve([]),listGroups()]);setUsers(userResult);setMembers(memberResult);setAllGroups(groupsResult)}).catch(() => setError(true));
   }, [groupId,user]);
 
   const candidates = useMemo(() => users.filter((user) => !members.some((member) => member.user_id === user.id)), [members, users]);
@@ -63,7 +61,6 @@ export default function GroupDetail() {
     catch { setError(true); } finally { setSaving(false); }
   }
   async function saveGroup(event:FormEvent){event.preventDefault();setSaving(true);setError(false);try{const updated=await updateGroup(groupId,{name,type,status,parent_group_id:parent});setGroup(updated)}catch{setError(true)}finally{setSaving(false)}}
-  async function togglePermission(permission:Permission,grant:boolean){setSaving(true);try{await setGroupPermission(groupId,permission.id,grant);setGroup(await getGroup(groupId))}catch{setError(true)}finally{setSaving(false)}}
 
   return <section className="groups-page">
     <Link to="..">{t("global.k_Settings_Groups_Back")}</Link>
@@ -82,6 +79,5 @@ export default function GroupDetail() {
     {canManageMembers?<div className="group-table-wrap"><table className="group-table"><thead><tr><th>{t("global.k_Settings_Groups_Label_User")}</th><th>{t("global.k_Settings_Groups_Label_GroupRole")}</th><th>{t("global.k_Settings_Groups_Label_MemberTitle")}</th><th>{t("global.k_Common_Actions")}</th></tr></thead>
       <tbody>{members.map((member) => <tr key={member.user_id}><td>{member.display_name}<br/><NexText as="span" variant="caption" color="muted">{member.email}</NexText></td><td><NexSelect ariaLabel={t("global.k_Settings_Groups_Label_GroupRole")} value={member.role} options={roleOptions} onChange={(next) => void changeRole(member, next)} /></td><td>{member.title || "-"}</td><td><NexButton type="button" variant="danger" size="compact" disabled={saving} onClick={() => void remove(member)}>{t("global.k_Common_Delete")}</NexButton></td></tr>)}</tbody>
     </table></div>:null}
-    <section className="group-form"><NexText variant="subheading">{t("global.k_Settings_Roles_PermissionsTitle")}</NexText>{group?.permissions.map((permission)=><NexText key={permission.id}>{permission.permission_key}</NexText>)}{canAssignPermissions?permissions.map((permission)=>{const granted=group?.permissions.some((item)=>item.id===permission.id)===true;return <label key={permission.id}><input type="checkbox" checked={granted} disabled={saving||!hasPermission(permission.permission_key)} onChange={(event)=>void togglePermission(permission,event.target.checked)}/> {permission.permission_key}</label>}):null}</section>
   </section>;
 }

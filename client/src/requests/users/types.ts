@@ -78,6 +78,7 @@ export interface UpdateUserInput {
   display_name?: string;
   email?: string;
   password?: string;
+  current_password?: string;
   status?: UserStatus;
   locale?: string;
   timezone?: string;

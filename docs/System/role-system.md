@@ -26,10 +26,10 @@ Role data is owned by UserSystem and stored in `user.db`. Clients and other modu
 | --- | --- |
 | `user_roles` | Many-to-many assignments between users and roles |
 | `role_permissions` | Many-to-many grants between roles and permission definitions |
-| `permissions` | Stable permission catalog shared by roles and groups |
+| `permissions` | Stable permission catalog assigned to roles |
 | `group_roles` | Maps each group to its generated `manager` and `member` system roles |
 
-A user may have multiple roles. Effective role permissions are additive: the user receives the union of permissions from every assigned role. A role cannot deny a permission granted by another role or group.
+A user may have multiple roles. Effective permissions are additive: the user receives the union of permissions from every assigned role. If any role grants a required permission, the request passes.
 
 ## 3. Role Types
 
@@ -81,16 +81,16 @@ All role endpoints require a valid access token.
 
 | Method | Path | Current authorization | Description |
 | --- | --- | --- | --- |
-| `GET` | `/api/roles` | Authenticated user | List roles |
-| `GET` | `/api/roles/{id}` | Authenticated user | Read one role |
+| `GET` | `/api/roles` | `roles.read` | List roles |
+| `GET` | `/api/roles/{id}` | `roles.read` | Read one role |
 | `POST` | `/api/roles` | `roles.manage` | Create a custom role |
 | `PATCH` | `/api/roles/{id}` | `roles.manage` | Update a custom role |
 | `DELETE` | `/api/roles/{id}` | `roles.manage` | Delete a custom role and its assignments |
-| `GET` | `/api/roles/{id}/users` | Authenticated user | List assigned users |
+| `GET` | `/api/roles/{id}/users` | `roles.read` | List assigned users |
 | `PUT` | `/api/roles/{id}/users/{userId}` | `roles.assign` | Assign a custom role |
 | `DELETE` | `/api/roles/{id}/users/{userId}` | `roles.assign` | Remove a custom role |
-| `PUT` | `/api/roles/{id}/permissions/{permissionId}` | `permissions.assign` | Grant a permission |
-| `DELETE` | `/api/roles/{id}/permissions/{permissionId}` | `permissions.assign` | Revoke a permission |
+| `PUT` | `/api/roles/{id}/permissions/{permissionId}` | Initial administrator | Grant a permission |
+| `DELETE` | `/api/roles/{id}/permissions/{permissionId}` | Initial administrator | Revoke a permission |
 
 Create request:
 
@@ -127,13 +127,13 @@ List responses wrap the records in a `roles` property. Creation returns `201 Cre
 
 ## 6. Frontend
 
-Role management is available under **Settings → Access Control → Roles**. The page lists role metadata and assigned permission counts. Authorized users can create, edit, and delete custom roles. The detail screen manages assigned users and permission grants. System roles are displayed as protected.
+Role management is available under **Settings → Access Control → Roles**. The page lists role metadata and assigned permission counts. Authorized users can create, edit, and delete custom roles, while only the protected initial administrator sees controls for changing permission grants. Other role managers see the assigned permissions read-only. Role assignment is intentionally user-centric: custom roles are assigned from **Settings → Users → User Detail**, which remains practical when the organization has many users. Generated group roles are managed only through group membership. System roles are displayed as protected.
 
 ## 7. Audit and Security
 
 Create, update, and delete API operations write request-log events containing the immutable role ID. Passwords, tokens, and SQL details must never be included in these events.
 
-The router authenticates every role request. Mutations enforce `roles.manage`, user-role assignment enforces `roles.assign`, and permission grants enforce `permissions.assign`. The initial administrator passes every permission check. A delegated administrator may grant only permissions they currently possess, preventing privilege escalation.
+The router authenticates every role request. Role metadata mutations enforce `roles.manage`, and user-role assignment enforces `roles.assign`. Only the protected initial administrator may grant or revoke permissions on a role. A delegated role manager may create, rename, and delete custom roles and may read their assigned permissions, but cannot change what any role grants even if that manager has `permissions.assign`.
 
 ## 8. Deletion Policy
 
@@ -148,6 +148,6 @@ Deleting a custom role must not delete or disable any user. The user simply lose
 
 ## 9. Permission Catalog
 
-The default catalog is seeded idempotently. `GET /api/permissions` lists definitions. The initial administrator may create definitions with `POST /api/permissions` and update module or description with `PATCH /api/permissions/{id}`. Permission keys are stable and cannot be renamed. Assignment changes and definition changes are written to the request log.
+[`config/permission.json`](../../config/permission.json) is the authoritative permission catalog. Startup validates it and synchronizes its definitions into `user.db`; `GET /api/permissions` lists the synchronized catalog. Permission definitions are changed in configuration, not through an API. Every new protected API route must declare a key present in this file or router initialization fails.
 
 The broader identity and authorization model is documented in [`user-system.md`](./user-system.md).

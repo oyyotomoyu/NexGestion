@@ -13,47 +13,51 @@ import (
 // perform application operations. The router itself is only responsible for
 // directing requests to the correct handler.
 func InitRouter(router *http.ServeMux, users *system.UserService, auth *system.AuthService, logService *applogs.Service) {
+	catalog, err := system.LoadPermissionCatalog()
+	if err != nil {
+		panic("load permission catalog: " + err.Error())
+	}
 	// Public endpoints.
 	router.HandleFunc("GET /api/health", Health)
 	router.HandleFunc("POST /api/auth/login", login(auth, logService))
 	router.HandleFunc("POST /api/auth/refresh", refresh(auth, logService))
 
-	// Protected endpoints. New business APIs must use requireAuth by default.
-	protected := func(handler http.HandlerFunc) http.HandlerFunc {
-		return requireAuth(auth, withRequestLogger(logService, handler))
+	// Every protected route declares a permission from config/permission.json.
+	// Adding a route without synchronizing the catalog fails during startup.
+	protected := func(permission string, handler http.HandlerFunc) http.HandlerFunc {
+		if !catalog.Contains(permission) {
+			panic("API route uses undefined permission: " + permission)
+		}
+		return requireAuth(auth, withRequestLogger(logService, requirePermission(users, permission, handler)))
 	}
-	router.HandleFunc("GET /api/auth/me", protected(me(users)))
-	router.HandleFunc("POST /api/auth/logout", protected(logout(auth)))
-	router.HandleFunc("GET /api/users", protected(listUsers(users)))
-	router.HandleFunc("POST /api/users", protected(createUser(users)))
-	router.HandleFunc("GET /api/users/{id}", protected(getUser(users)))
-	router.HandleFunc("PUT /api/users/{id}", protected(updateUser(users)))
-	router.HandleFunc("PATCH /api/users/{id}", protected(updateUser(users)))
-	router.HandleFunc("DELETE /api/users/{id}", protected(deleteUser(users)))
-	router.HandleFunc("GET /api/roles", protected(listRoles(users)))
-	router.HandleFunc("GET /api/roles/{id}", protected(getRole(users)))
-	router.HandleFunc("POST /api/roles", protected(createRole(users)))
-	router.HandleFunc("PATCH /api/roles/{id}", protected(updateRole(users)))
-	router.HandleFunc("DELETE /api/roles/{id}", protected(deleteRole(users)))
-	router.HandleFunc("GET /api/roles/{id}/users", protected(listRoleUsers(users)))
-	router.HandleFunc("PUT /api/roles/{id}/users/{userId}", protected(setRoleUser(users, true)))
-	router.HandleFunc("DELETE /api/roles/{id}/users/{userId}", protected(setRoleUser(users, false)))
-	router.HandleFunc("PUT /api/roles/{id}/permissions/{permissionId}", protected(setRolePermission(users, true)))
-	router.HandleFunc("DELETE /api/roles/{id}/permissions/{permissionId}", protected(setRolePermission(users, false)))
-	router.HandleFunc("GET /api/groups", protected(listGroups(users)))
-	router.HandleFunc("GET /api/groups/{id}", protected(getGroup(users)))
-	router.HandleFunc("POST /api/groups", protected(createGroup(users)))
-	router.HandleFunc("PATCH /api/groups/{id}", protected(updateGroup(users)))
-	router.HandleFunc("DELETE /api/groups/{id}", protected(deleteGroup(users)))
-	router.HandleFunc("GET /api/groups/{id}/members", protected(listGroupMembers(users)))
-	router.HandleFunc("PUT /api/groups/{id}/members/{userId}", protected(setGroupMember(users)))
-	router.HandleFunc("DELETE /api/groups/{id}/members/{userId}", protected(removeGroupMember(users)))
-	router.HandleFunc("PUT /api/groups/{id}/permissions/{permissionId}", protected(setGroupPermission(users, true)))
-	router.HandleFunc("DELETE /api/groups/{id}/permissions/{permissionId}", protected(setGroupPermission(users, false)))
-	router.HandleFunc("GET /api/permissions", protected(listPermissions(users)))
-	router.HandleFunc("POST /api/permissions", protected(createPermission(users)))
-	router.HandleFunc("PATCH /api/permissions/{id}", protected(updatePermission(users)))
-	router.HandleFunc("GET /api/logs", protected(readLogs(logService)))
+	router.HandleFunc("GET /api/auth/me", protected("users.read", me(users)))
+	router.HandleFunc("POST /api/auth/logout", protected("users.read", logout(auth)))
+	router.HandleFunc("GET /api/users", protected("users.read", listUsers(users)))
+	router.HandleFunc("POST /api/users", protected("users.manage", createUser(users)))
+	router.HandleFunc("GET /api/users/{id}", protected("users.read", getUser(users)))
+	router.HandleFunc("PUT /api/users/{id}", protected("users.manage", updateUser(users)))
+	router.HandleFunc("PATCH /api/users/{id}", protected("users.manage", updateUser(users)))
+	router.HandleFunc("DELETE /api/users/{id}", protected("users.manage", deleteUser(users)))
+	router.HandleFunc("GET /api/roles", protected("roles.read", listRoles(users)))
+	router.HandleFunc("GET /api/roles/{id}", protected("roles.read", getRole(users)))
+	router.HandleFunc("POST /api/roles", protected("roles.manage", createRole(users)))
+	router.HandleFunc("PATCH /api/roles/{id}", protected("roles.manage", updateRole(users)))
+	router.HandleFunc("DELETE /api/roles/{id}", protected("roles.manage", deleteRole(users)))
+	router.HandleFunc("GET /api/roles/{id}/users", protected("roles.read", listRoleUsers(users)))
+	router.HandleFunc("PUT /api/roles/{id}/users/{userId}", protected("roles.assign", setRoleUser(users, true)))
+	router.HandleFunc("DELETE /api/roles/{id}/users/{userId}", protected("roles.assign", setRoleUser(users, false)))
+	router.HandleFunc("PUT /api/roles/{id}/permissions/{permissionId}", protected("permissions.assign", setRolePermission(users, true)))
+	router.HandleFunc("DELETE /api/roles/{id}/permissions/{permissionId}", protected("permissions.assign", setRolePermission(users, false)))
+	router.HandleFunc("GET /api/groups", protected("groups.read", listGroups(users)))
+	router.HandleFunc("GET /api/groups/{id}", protected("groups.read", getGroup(users)))
+	router.HandleFunc("POST /api/groups", protected("groups.manage", createGroup(users)))
+	router.HandleFunc("PATCH /api/groups/{id}", protected("groups.manage", updateGroup(users)))
+	router.HandleFunc("DELETE /api/groups/{id}", protected("groups.manage", deleteGroup(users)))
+	router.HandleFunc("GET /api/groups/{id}/members", protected("groups.read", listGroupMembers(users)))
+	router.HandleFunc("PUT /api/groups/{id}/members/{userId}", protected("groups.assign", setGroupMember(users)))
+	router.HandleFunc("DELETE /api/groups/{id}/members/{userId}", protected("groups.assign", removeGroupMember(users)))
+	router.HandleFunc("GET /api/permissions", protected("permissions.read", listPermissions(users)))
+	router.HandleFunc("GET /api/logs", protected("logs.read", readLogs(logService)))
 
 	// Keep unknown API paths inside the API layer instead of falling through to
 	// the SPA handler.

@@ -4,11 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"errors"
-	"fmt"
-	"strings"
 	"time"
-
-	"github.com/google/uuid"
 )
 
 var (
@@ -16,35 +12,37 @@ var (
 	ErrPermissionDenied   = errors.New("permission denied")
 )
 
-type CreatePermissionInput struct {
-	PermissionKey string  `json:"permission_key"`
-	Module        string  `json:"module"`
-	Description   *string `json:"description"`
-}
-type UpdatePermissionInput struct {
-	Module      *string `json:"module"`
-	Description *string `json:"description"`
-}
-
-func hasPermission(ctx context.Context, db *sql.DB, userID, key string) bool {
-	if IsInitialAdministrator(userID) {
-		return true
-	}
-	var count int
-	err := db.QueryRowContext(ctx, `SELECT COUNT(*) FROM (
-		SELECT p.id FROM permissions p JOIN role_permissions rp ON rp.permission_id=p.id JOIN user_roles ur ON ur.role_id=rp.role_id WHERE ur.user_id=? AND p.permission_key=?
-		UNION SELECT p.id FROM permissions p JOIN group_permissions gp ON gp.permission_id=p.id JOIN user_groups ug ON ug.group_id=gp.group_id JOIN groups g ON g.id=ug.group_id
-		WHERE ug.user_id=? AND ug.left_at IS NULL AND g.status='active' AND p.permission_key=?)`, userID, key, userID, key).Scan(&count)
-	return err == nil && count > 0
-}
-
-func (s *UserService) HasPermission(ctx context.Context, userID, key string) bool {
+// EffectivePermissionKeys returns permission data derived from every role
+// assigned to a user. Request authorization decisions belong to the API layer.
+func (s *UserService) EffectivePermissionKeys(ctx context.Context, userID string) ([]string, error) {
 	db, err := s.open()
 	if err != nil {
-		return false
+		return nil, err
 	}
 	defer db.Close()
-	return hasPermission(ctx, db, userID, key)
+	rows, err := db.QueryContext(ctx, `SELECT DISTINCT p.permission_key
+		FROM user_roles ur
+		JOIN roles r ON r.id = ur.role_id
+		JOIN permissions p ON r.grants_all_permissions = 1
+			OR EXISTS (
+				SELECT 1 FROM role_permissions rp
+				WHERE rp.role_id = r.id AND rp.permission_id = p.id
+			)
+		WHERE ur.user_id = ?
+		ORDER BY p.permission_key`, userID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	keys := []string{}
+	for rows.Next() {
+		var key string
+		if err := rows.Scan(&key); err != nil {
+			return nil, err
+		}
+		keys = append(keys, key)
+	}
+	return keys, rows.Err()
 }
 
 func (s *UserService) ListPermissions(ctx context.Context) ([]Permission, error) {
@@ -69,55 +67,6 @@ func (s *UserService) ListPermissions(ctx context.Context) ([]Permission, error)
 	return result, rows.Err()
 }
 
-func (s *UserService) CreatePermission(ctx context.Context, actor string, input CreatePermissionInput) (*Permission, error) {
-	if !IsInitialAdministrator(actor) {
-		return nil, ErrPermissionDenied
-	}
-	key, module := strings.TrimSpace(input.PermissionKey), strings.TrimSpace(input.Module)
-	if key == "" || module == "" {
-		return nil, errors.New("permission key and module are required")
-	}
-	db, err := s.open()
-	if err != nil {
-		return nil, err
-	}
-	defer db.Close()
-	id := uuid.NewString()
-	if _, err = db.ExecContext(ctx, `INSERT INTO permissions(id,permission_key,module,description,created_at) VALUES(?,?,?,?,?)`, id, key, module, normalizeOptionalText(input.Description), time.Now().UTC().Format(time.RFC3339)); err != nil {
-		return nil, fmt.Errorf("create permission: %w", err)
-	}
-	return getPermission(ctx, db, id)
-}
-
-func (s *UserService) UpdatePermission(ctx context.Context, actor, id string, input UpdatePermissionInput) (*Permission, error) {
-	if !IsInitialAdministrator(actor) {
-		return nil, ErrPermissionDenied
-	}
-	db, err := s.open()
-	if err != nil {
-		return nil, err
-	}
-	defer db.Close()
-	if _, err = getPermission(ctx, db, id); err != nil {
-		return nil, err
-	}
-	if input.Module != nil {
-		module := strings.TrimSpace(*input.Module)
-		if module == "" {
-			return nil, errors.New("permission module is required")
-		}
-		if _, err = db.ExecContext(ctx, `UPDATE permissions SET module=? WHERE id=?`, module, id); err != nil {
-			return nil, err
-		}
-	}
-	if input.Description != nil {
-		if _, err = db.ExecContext(ctx, `UPDATE permissions SET description=? WHERE id=?`, normalizeOptionalText(input.Description), id); err != nil {
-			return nil, err
-		}
-	}
-	return getPermission(ctx, db, id)
-}
-
 func getPermission(ctx context.Context, db *sql.DB, id string) (*Permission, error) {
 	var p Permission
 	err := db.QueryRowContext(ctx, `SELECT id,permission_key,module,description FROM permissions WHERE id=?`, id).Scan(&p.ID, &p.PermissionKey, &p.Module, &p.Description)
@@ -128,6 +77,13 @@ func getPermission(ctx context.Context, db *sql.DB, id string) (*Permission, err
 }
 
 func (s *UserService) SetRolePermission(ctx context.Context, actor, roleID, permissionID string, grant bool) error {
+	// Role metadata management may be delegated through roles.manage, but the
+	// authority to change what a role grants is reserved for the initial
+	// administrator. Keeping this check independent of permissions.assign
+	// prevents a delegated role editor from escalating privileges.
+	if !IsInitialAdministrator(actor) {
+		return ErrPermissionDenied
+	}
 	db, err := s.open()
 	if err != nil {
 		return err
@@ -140,45 +96,13 @@ func (s *UserService) SetRolePermission(ctx context.Context, actor, roleID, perm
 	if role.IsSystem {
 		return ErrRoleProtected
 	}
-	if !hasPermission(ctx, db, actor, "permissions.assign") {
-		return ErrPermissionDenied
-	}
 	if _, err = getPermission(ctx, db, permissionID); err != nil {
 		return err
-	}
-	if !IsInitialAdministrator(actor) && !hasPermission(ctx, db, actor, permissionID) {
-		return ErrPermissionDenied
 	}
 	if grant {
 		_, err = db.ExecContext(ctx, `INSERT OR IGNORE INTO role_permissions(role_id,permission_id,created_at) VALUES(?,?,?)`, roleID, permissionID, time.Now().UTC().Format(time.RFC3339))
 	} else {
 		_, err = db.ExecContext(ctx, `DELETE FROM role_permissions WHERE role_id=? AND permission_id=?`, roleID, permissionID)
-	}
-	return err
-}
-
-func (s *UserService) SetGroupPermission(ctx context.Context, actor, groupID, permissionID string, grant bool) error {
-	db, err := s.open()
-	if err != nil {
-		return err
-	}
-	defer db.Close()
-	if _, err = getGroup(ctx, db, groupID); err != nil {
-		return err
-	}
-	if !hasPermission(ctx, db, actor, "permissions.assign") {
-		return ErrPermissionDenied
-	}
-	if _, err = getPermission(ctx, db, permissionID); err != nil {
-		return err
-	}
-	if !IsInitialAdministrator(actor) && !hasPermission(ctx, db, actor, permissionID) {
-		return ErrPermissionDenied
-	}
-	if grant {
-		_, err = db.ExecContext(ctx, `INSERT OR IGNORE INTO group_permissions(group_id,permission_id,created_at) VALUES(?,?,?)`, groupID, permissionID, time.Now().UTC().Format(time.RFC3339))
-	} else {
-		_, err = db.ExecContext(ctx, `DELETE FROM group_permissions WHERE group_id=? AND permission_id=?`, groupID, permissionID)
 	}
 	return err
 }
@@ -229,9 +153,6 @@ func (s *UserService) SetRoleUser(ctx context.Context, actor, roleID, userID str
 	}
 	if role.IsSystem {
 		return ErrRoleProtected
-	}
-	if !hasPermission(ctx, db, actor, "roles.assign") {
-		return ErrPermissionDenied
 	}
 	var exists int
 	if err = db.QueryRowContext(ctx, `SELECT COUNT(*) FROM users WHERE id=? AND deleted_at IS NULL`, userID).Scan(&exists); err != nil {

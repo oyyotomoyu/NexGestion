@@ -31,6 +31,8 @@ install:
 	@test -d "$(BUILD_DIR)/$(PLATFORM)" || (echo "unknown or unbuilt platform: $(PLATFORM)" && exit 1)
 	mkdir -p $(DESTDIR)/server
 	cp -R $(BUILD_DIR)/$(PLATFORM)/. $(DESTDIR)/server/
+	mkdir -p $(DESTDIR)/server/config
+	cp ../config/permission.json $(DESTDIR)/server/config/permission.json
 
 test:
 	go test ./...

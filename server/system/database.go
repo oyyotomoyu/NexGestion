@@ -20,6 +20,7 @@ type DatabaseSpec struct {
 	Schema   []string
 	Seed     []string
 	SeedFunc func(context.Context, *sql.Tx) error
+	SyncFunc func(context.Context, *sql.Tx) error
 }
 
 // RequiredDatabases is the list of SQLite databases needed by NexGestion.
@@ -98,6 +99,11 @@ func ensureDatabase(ctx context.Context, directory string, spec DatabaseSpec) er
 	for _, statement := range spec.Schema {
 		if _, err := tx.ExecContext(ctx, statement); err != nil {
 			return fmt.Errorf("apply schema: %w", err)
+		}
+	}
+	if spec.SyncFunc != nil {
+		if err := spec.SyncFunc(ctx, tx); err != nil {
+			return fmt.Errorf("synchronize data: %w", err)
 		}
 	}
 

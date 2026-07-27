@@ -1,7 +1,43 @@
 import { request } from "@/requests/core/client";
 import type { CreateGroupInput, Group, GroupMember, SetGroupMemberInput, UpdateGroupInput } from "./types";
 
-let mockGroups: Group[] = [];
+let mockGroups: Group[] = [
+  {
+    id: "group-operations",
+    name: "Operations",
+    type: "department",
+    parent_group_id: null,
+    status: "active",
+    created_at: "2025-02-03T03:00:00.000Z",
+    updated_at: "2026-07-13T08:45:00.000Z",
+    member_count: 1,
+    manager_role_id: "group-operations-manager",
+    member_role_id: "group-operations-member",
+  },
+  {
+    id: "group-people",
+    name: "People",
+    type: "department",
+    parent_group_id: null,
+    status: "active",
+    created_at: "2026-07-01T06:30:00.000Z",
+    updated_at: "2026-07-01T06:30:00.000Z",
+    member_count: 1,
+    manager_role_id: "group-people-manager",
+    member_role_id: "group-people-member",
+  },
+];
+
+let mockGroupMembers: Record<string, GroupMember[]> = {
+  "group-operations": [{
+    user_id: "1", display_name: "Mina Lin", email: "mina.lin@nexgestion.test",
+    role: "manager", title: "Manager", joined_at: "2025-02-03",
+  }],
+  "group-people": [{
+    user_id: "2", display_name: "Jordan Wang", email: "jordan.wang@nexgestion.test",
+    role: "member", title: "Specialist", joined_at: "2026-07-01",
+  }],
+};
 
 export async function listGroups() {
   if (import.meta.env.DEV) return [...mockGroups];
@@ -23,7 +59,7 @@ export function createGroup(input: CreateGroupInput) {
     const group: Group = {
       id: crypto.randomUUID(), name: input.name.trim(), type: input.type.trim(),
       parent_group_id: input.parent_group_id || null, status: input.status || "active",
-      created_at: now, updated_at: now, member_count: 0, permissions: [],
+      created_at: now, updated_at: now, member_count: 0,
       manager_role_id: crypto.randomUUID(), member_role_id: crypto.randomUUID(),
     };
     mockGroups = [...mockGroups, group];
@@ -33,6 +69,21 @@ export function createGroup(input: CreateGroupInput) {
 }
 
 export function updateGroup(id: string, input: UpdateGroupInput) {
+  if (import.meta.env.DEV) {
+    const index = mockGroups.findIndex((group) => group.id === id);
+    if (index < 0) return Promise.reject(new Error("Group not found"));
+    const current = mockGroups[index];
+    const updated: Group = {
+      ...current,
+      name: input.name?.trim() || current.name,
+      type: input.type?.trim() || current.type,
+      parent_group_id: input.parent_group_id === undefined ? current.parent_group_id : input.parent_group_id || null,
+      status: input.status || current.status,
+      updated_at: new Date().toISOString(),
+    };
+    mockGroups = mockGroups.map((group) => group.id === id ? updated : group);
+    return Promise.resolve({ ...updated });
+  }
   return request<Group>(`/api/groups/${encodeURIComponent(id)}`, { method: "PATCH", body: JSON.stringify(input) });
 }
 
@@ -42,6 +93,7 @@ export function deleteGroup(id: string) {
 }
 
 export async function listGroupMembers(id: string) {
+  if (import.meta.env.DEV) return [...(mockGroupMembers[id] || [])];
   const response = await request<{ members: GroupMember[] }>(`/api/groups/${encodeURIComponent(id)}/members`);
   return response.members;
 }

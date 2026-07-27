@@ -97,11 +97,18 @@ func getRole(ctx context.Context, db *sql.DB, id string) (*Role, error) {
 	role.GrantsAllPermissions = grantsAll == 1
 	role.Permissions = []Permission{}
 
-	rows, err := db.QueryContext(ctx, `SELECT p.id, p.permission_key, p.module, p.description
+	permissionQuery := `SELECT p.id, p.permission_key, p.module, p.description
 		FROM permissions p
 		JOIN role_permissions rp ON rp.permission_id = p.id
 		WHERE rp.role_id = ?
-		ORDER BY p.permission_key`, id)
+		ORDER BY p.permission_key`
+	args := []any{id}
+	if role.GrantsAllPermissions {
+		permissionQuery = `SELECT id, permission_key, module, description
+			FROM permissions ORDER BY permission_key`
+		args = nil
+	}
+	rows, err := db.QueryContext(ctx, permissionQuery, args...)
 	if err != nil {
 		return nil, err
 	}
@@ -117,9 +124,6 @@ func getRole(ctx context.Context, db *sql.DB, id string) (*Role, error) {
 }
 
 func (s *UserService) CreateRole(ctx context.Context, actorUserID string, input CreateRoleInput) (*Role, error) {
-	if !s.HasPermission(ctx, actorUserID, "roles.manage") {
-		return nil, ErrPermissionDenied
-	}
 	title, err := normalizeRoleTitle(input.Title)
 	if err != nil {
 		return nil, err
@@ -141,9 +145,6 @@ func (s *UserService) CreateRole(ctx context.Context, actorUserID string, input 
 }
 
 func (s *UserService) UpdateRole(ctx context.Context, actorUserID, id string, input UpdateRoleInput) (*Role, error) {
-	if !s.HasPermission(ctx, actorUserID, "roles.manage") {
-		return nil, ErrPermissionDenied
-	}
 	if id == adminRoleID {
 		return nil, ErrRoleProtected
 	}
@@ -187,9 +188,6 @@ func (s *UserService) UpdateRole(ctx context.Context, actorUserID, id string, in
 }
 
 func (s *UserService) DeleteRole(ctx context.Context, actorUserID, id string) error {
-	if !s.HasPermission(ctx, actorUserID, "roles.manage") {
-		return ErrPermissionDenied
-	}
 	if id == adminRoleID {
 		return ErrRoleProtected
 	}

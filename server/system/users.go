@@ -14,7 +14,10 @@ import (
 	"golang.org/x/crypto/bcrypt"
 )
 
-var ErrUserNotFound = errors.New("user not found")
+var (
+	ErrUserNotFound         = errors.New("user not found")
+	ErrCurrentPasswordWrong = errors.New("current password is incorrect")
+)
 
 type User struct {
 	ID                 string           `json:"id"`
@@ -87,6 +90,7 @@ type UpdateUserInput struct {
 	DisplayName        *string `json:"display_name"`
 	Email              *string `json:"email"`
 	Password           *string `json:"password"`
+	CurrentPassword    *string `json:"current_password"`
 	Status             *string `json:"status"`
 	Locale             *string `json:"locale"`
 	Timezone           *string `json:"timezone"`
@@ -230,7 +234,7 @@ func getUser(ctx context.Context, db *sql.DB, id string) (*User, error) {
 	return &u, rows.Err()
 }
 
-func (s *UserService) Create(ctx context.Context, input CreateUserInput) (*User, error) {
+func (s *UserService) Create(ctx context.Context, actorUserID string, input CreateUserInput) (*User, error) {
 	input.DisplayName = strings.TrimSpace(input.DisplayName)
 	email, err := normalizeUserEmail(input.Email)
 	if err != nil {
@@ -271,14 +275,30 @@ func (s *UserService) Create(ctx context.Context, input CreateUserInput) (*User,
 	return getUser(ctx, db, id)
 }
 
-func (s *UserService) Update(ctx context.Context, id string, input UpdateUserInput) (*User, error) {
+func (s *UserService) Update(ctx context.Context, actorUserID, id string, input UpdateUserInput) (*User, error) {
+	if actorUserID == id && (input.Status != nil || input.MustChangePassword != nil) {
+		return nil, ErrPermissionDenied
+	}
 	db, err := s.open()
 	if err != nil {
 		return nil, err
 	}
 	defer db.Close()
-	if _, err := getUser(ctx, db, id); err != nil {
+	current, err := getUser(ctx, db, id)
+	if err != nil {
 		return nil, err
+	}
+	if actorUserID == id {
+		if input.CurrentPassword == nil || strings.TrimSpace(*input.CurrentPassword) == "" {
+			return nil, ErrCurrentPasswordWrong
+		}
+		var passwordHash string
+		if err := db.QueryRowContext(ctx, `SELECT password_hash FROM users WHERE id = ?`, id).Scan(&passwordHash); err != nil {
+			return nil, err
+		}
+		if bcrypt.CompareHashAndPassword([]byte(passwordHash), []byte(*input.CurrentPassword)) != nil {
+			return nil, ErrCurrentPasswordWrong
+		}
 	}
 	sets, args := []string{}, []any{}
 	if input.DisplayName != nil {
@@ -298,6 +318,9 @@ func (s *UserService) Update(ctx context.Context, id string, input UpdateUserInp
 		args = append(args, v)
 	}
 	if input.Status != nil {
+		if current.IsProtected && *input.Status != "active" {
+			return nil, errors.New("protected user must remain active")
+		}
 		if !validUserStatus(*input.Status) {
 			return nil, errors.New("invalid user status")
 		}
@@ -343,7 +366,7 @@ func (s *UserService) Update(ctx context.Context, id string, input UpdateUserInp
 	return getUser(ctx, db, id)
 }
 
-func (s *UserService) Delete(ctx context.Context, id string) error {
+func (s *UserService) Delete(ctx context.Context, actorUserID, id string) error {
 	db, err := s.open()
 	if err != nil {
 		return err

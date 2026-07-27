@@ -4,7 +4,7 @@
 
 The Group System represents where users belong within the single organization managed by a NexGestion installation. A group may represent a department, branch, store, project team, or working group.
 
-Groups do not implicitly grant access based on their name, type, or hierarchy. Access is granted only through explicit `group_permissions` records. Roles answer **what a user may do**; groups answer **where a user belongs**.
+Groups do not grant access based on their name, type, membership, or hierarchy. Roles answer **what a user may do**; groups answer **where a user belongs**. All request authorization comes from roles.
 
 Group data is owned by UserSystem and stored in `user.db`.
 
@@ -35,19 +35,13 @@ Group data is owned by UserSystem and stored in `user.db`.
 
 The composite `(user_id, group_id)` key prevents duplicate membership records. A user may belong to multiple groups.
 
-### 2.3 `group_permissions`
-
-`group_permissions` links a group to entries in the shared `permissions` catalog. Active members receive the union of permissions from all active groups and assigned roles. Permission grants are additive.
-
-Group hierarchy is organizational only. A parent does not receive permissions from its children, and a child does not inherit permissions or members from its parent.
-
-### 2.4 `group_roles`
+### 2.3 `group_roles`
 
 Each group owns exactly two generated system roles:
 
 | Kind | Generated title | Purpose |
 | --- | --- | --- |
-| `manager` | `<Group Name> Manager` | May list, add, update, promote, demote, and remove members in that group |
+| `manager` | `<Group Name> Manager` | Records manager membership; API access still requires catalog permissions |
 | `member` | `<Group Name> Member` | Records ordinary membership without management authority |
 
 Membership updates keep `user_groups` and the corresponding `user_roles` assignment synchronized. A user has only one of these two roles for a given group at a time.
@@ -72,7 +66,6 @@ The service traverses the proposed ancestor chain before saving an update, preve
 - Group list results are ordered by name case-insensitively.
 - `member_count` counts memberships whose `left_at` is `NULL`.
 - Existing memberships do not block deletion; they are removed atomically with the group.
-- Permission links are removed before a group is deleted.
 - Group creation and creation of its Manager and Member roles occur in one transaction.
 - Generated group roles are protected from direct Role API updates and deletion.
 - Renaming a group atomically renames its generated Manager and Member roles.
@@ -85,16 +78,14 @@ All group endpoints require a valid access token.
 
 | Method | Path | Current authorization | Description |
 | --- | --- | --- | --- |
-| `GET` | `/api/groups` | Authenticated user | List groups |
-| `GET` | `/api/groups/{id}` | Authenticated user | Read one group |
+| `GET` | `/api/groups` | `groups.read` | List groups |
+| `GET` | `/api/groups/{id}` | `groups.read` | Read one group |
 | `POST` | `/api/groups` | `groups.manage` | Create a group |
 | `PATCH` | `/api/groups/{id}` | `groups.manage` | Update a group |
 | `DELETE` | `/api/groups/{id}` | `groups.manage` | Delete a leaf group and its owned records |
-| `GET` | `/api/groups/{id}/members` | `groups.assign` or that group's manager | List active members |
-| `PUT` | `/api/groups/{id}/members/{userId}` | `groups.assign` or that group's manager | Add or update a member |
-| `DELETE` | `/api/groups/{id}/members/{userId}` | `groups.assign` or that group's manager | Remove a member |
-| `PUT` | `/api/groups/{id}/permissions/{permissionId}` | `permissions.assign` | Grant a permission |
-| `DELETE` | `/api/groups/{id}/permissions/{permissionId}` | `permissions.assign` | Revoke a permission |
+| `GET` | `/api/groups/{id}/members` | `groups.read` | List active members |
+| `PUT` | `/api/groups/{id}/members/{userId}` | `groups.assign` | Add or update a member |
+| `DELETE` | `/api/groups/{id}/members/{userId}` | `groups.assign` | Remove a member |
 
 Create request:
 
@@ -122,8 +113,7 @@ Group response:
   "updated_at": "2026-07-22T08:30:00Z",
   "member_count": 0,
   "manager_role_id": "382c962e-8de2-4beb-9240-23859155f43d",
-  "member_role_id": "f628773e-a017-445d-9a2f-5bfc75d87646",
-  "permissions": []
+  "member_role_id": "f628773e-a017-445d-9a2f-5bfc75d87646"
 }
 ```
 
@@ -176,13 +166,13 @@ Errors use the shared JSON form:
 
 ## 7. Frontend
 
-Group management is available under **Settings → Access Control → Groups**. The list displays name, type, parent, status, active member count, and available actions. The detail screen supports metadata editing, permission grants, and membership management. The protected administrator, users with delegated permissions, and the group's own managers see only the actions authorized for them. The interface is localized in English, Traditional Chinese, and Japanese.
+Group management is available under **Settings → Access Control → Groups**. The list displays name, type, parent, status, active member count, and available actions. The detail screen supports metadata editing and membership management according to the user's role permissions.
 
 ## 8. Audit and Security
 
-Create, update, delete, permission, and membership API operations write request-log events containing immutable record IDs.
+Create, update, delete, and membership API operations write request-log events containing immutable record IDs.
 
-The router authenticates all group requests. Mutations enforce `groups.manage`, membership changes enforce `groups.assign` or the scoped Manager role, and permission grants enforce `permissions.assign`. A delegated administrator may grant only permissions they currently possess.
+The router authenticates all group requests. Reads enforce `groups.read`, mutations enforce `groups.manage`, and membership changes enforce `groups.assign`. Group membership and generated group roles do not bypass request permissions.
 
 ## 9. Deletion Policy
 
@@ -192,10 +182,9 @@ Deleting a leaf group performs this transaction in order:
 
 1. Remove every user's assignments to the generated Manager and Member roles.
 2. Remove all `user_groups` membership records for the group.
-3. Remove all `group_permissions` grants.
-4. Remove both `group_roles` ownership links.
-5. Delete the generated Manager and Member roles.
-6. Delete the group.
+3. Remove both `group_roles` ownership links.
+4. Delete the generated Manager and Member roles.
+5. Delete the group.
 
 Users themselves are never deleted or disabled. Their unrelated custom roles, other group roles, and other memberships remain unchanged. If any step fails, the transaction rolls back, leaving the group and all relationships intact.
 
@@ -203,14 +192,13 @@ A group with children cannot be deleted because silently deleting or moving an o
 
 | Record | Independent deletion | Owner-driven deletion |
 | --- | --- | --- |
-| Group | Allowed only when it has no children | Removes memberships, grants, and generated roles |
+| Group | Allowed only when it has no children | Removes memberships and generated roles |
 | Group Manager role | Not allowed | Deleted with its group |
 | Group Member role | Not allowed | Deleted with its group |
-| Group membership | Allowed by administrator or that group's manager | Deleted with its group |
-| Group permission grant | Managed separately | Deleted with its group |
+| Group membership | Requires `groups.assign` | Deleted with its group |
 
 ## 10. Explicitly Unsupported Behavior
 
-Hierarchical permission and membership inheritance is intentionally unsupported. Parent relationships describe organization structure only; all memberships and grants must be explicit.
+Permission inheritance from groups is intentionally unsupported. Parent relationships describe organization structure only.
 
 The broader identity and authorization model is documented in [`user-system.md`](./user-system.md).

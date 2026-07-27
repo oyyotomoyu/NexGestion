@@ -1,9 +1,50 @@
 package apis
 
 import (
+	"context"
 	"net/http"
 	"nexgestion/server/system"
 )
+
+// requirePermission authorizes a request using the union of permissions from
+// every role assigned to the authenticated user. Authentication must run
+// before this middleware so the access-token claims are available.
+func requirePermission(users *system.UserService, permission string, next http.HandlerFunc) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		claims, ok := r.Context().Value(authContextKey{}).(*system.AccessClaims)
+		if !ok || claims.Subject == "" {
+			writeAuthError(w, system.ErrInvalidToken)
+			return
+		}
+		allowed, err := userHasPermission(r.Context(), users, claims.Subject, permission)
+		if err != nil {
+			recordRequestLog(r, "error", "permission check failed: "+r.Method+" "+r.URL.Path+" requires "+permission)
+			writeSystemError(w, err)
+			return
+		}
+		if !allowed {
+			recordRequestLog(r, "warning", "permission denied: "+r.Method+" "+r.URL.Path+" requires "+permission)
+			writeSystemError(w, system.ErrPermissionDenied)
+			return
+		}
+		next(w, r)
+	}
+}
+
+// userHasPermission is the API authorization decision point. Effective
+// permissions are the union of all roles assigned to the user.
+func userHasPermission(ctx context.Context, users *system.UserService, userID, required string) (bool, error) {
+	keys, err := users.EffectivePermissionKeys(ctx, userID)
+	if err != nil {
+		return false, err
+	}
+	for _, key := range keys {
+		if key == required {
+			return true, nil
+		}
+	}
+	return false, nil
+}
 
 func listPermissions(users *system.UserService) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
@@ -15,38 +56,6 @@ func listPermissions(users *system.UserService) http.HandlerFunc {
 		writeJSON(w, http.StatusOK, map[string]any{"permissions": items})
 	}
 }
-func createPermission(users *system.UserService) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		var input system.CreatePermissionInput
-		if err := decodeJSON(w, r, &input); err != nil {
-			writeJSON(w, http.StatusBadRequest, map[string]string{"error": err.Error()})
-			return
-		}
-		item, err := users.CreatePermission(r.Context(), authenticatedUserID(r), input)
-		if err != nil {
-			writeSystemError(w, err)
-			return
-		}
-		recordRequestLog(r, "info", "created permission "+item.ID)
-		writeJSON(w, http.StatusCreated, item)
-	}
-}
-func updatePermission(users *system.UserService) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		var input system.UpdatePermissionInput
-		if err := decodeJSON(w, r, &input); err != nil {
-			writeJSON(w, http.StatusBadRequest, map[string]string{"error": err.Error()})
-			return
-		}
-		item, err := users.UpdatePermission(r.Context(), authenticatedUserID(r), r.PathValue("id"), input)
-		if err != nil {
-			writeSystemError(w, err)
-			return
-		}
-		recordRequestLog(r, "info", "updated permission "+item.ID)
-		writeJSON(w, http.StatusOK, item)
-	}
-}
 func setRolePermission(users *system.UserService, grant bool) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if err := users.SetRolePermission(r.Context(), authenticatedUserID(r), r.PathValue("id"), r.PathValue("permissionId"), grant); err != nil {
@@ -54,16 +63,6 @@ func setRolePermission(users *system.UserService, grant bool) http.HandlerFunc {
 			return
 		}
 		recordRequestLog(r, "info", "changed role permission "+r.PathValue("permissionId")+" on "+r.PathValue("id"))
-		w.WriteHeader(http.StatusNoContent)
-	}
-}
-func setGroupPermission(users *system.UserService, grant bool) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		if err := users.SetGroupPermission(r.Context(), authenticatedUserID(r), r.PathValue("id"), r.PathValue("permissionId"), grant); err != nil {
-			writeSystemError(w, err)
-			return
-		}
-		recordRequestLog(r, "info", "changed group permission "+r.PathValue("permissionId")+" on "+r.PathValue("id"))
 		w.WriteHeader(http.StatusNoContent)
 	}
 }

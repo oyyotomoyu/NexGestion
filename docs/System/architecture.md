@@ -153,7 +153,7 @@ Initial database ownership decision:
 - `user.db`: All UserSystem data, including users, employee profiles, roles, permissions, and groups
 - Business modules must reference UserSystem records by immutable identifiers instead of duplicating user data
 
-The UserSystem model is documented in [`user-system.md`](./user-system.md), with focused contracts in [`role-system.md`](./role-system.md) and [`group-system.md`](./group-system.md).
+The UserSystem model is documented in [`user-system.md`](./user-system.md), with focused contracts in [`permission-system.md`](./permission-system.md), [`role-system.md`](./role-system.md), and [`group-system.md`](./group-system.md).
 
 Pending decisions:
 

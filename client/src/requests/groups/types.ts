@@ -1,5 +1,3 @@
-import type { Permission } from "@/requests/users/types";
-
 export type GroupStatus = "active" | "inactive";
 
 export interface Group {
@@ -13,7 +11,6 @@ export interface Group {
   member_count: number;
   manager_role_id: string;
   member_role_id: string;
-  permissions: Permission[];
 }
 
 export type GroupMemberRole = "manager" | "member";

@@ -100,7 +100,7 @@ Role APIs:
 | `PATCH` | `/api/roles/{id}` | `roles.manage` | Edit a custom role |
 | `DELETE` | `/api/roles/{id}` | `roles.manage` | Delete a custom role and its assignments |
 
-The protected administrator passes every permission check. Role list and detail responses include the role's assigned permission definitions. `POST` and `PATCH` accept role metadata; permission grants are managed separately through permission-assignment operations requiring `permissions.assign`.
+The protected administrator passes every permission check. Role list and detail responses include the role's assigned permission definitions. `POST` and `PATCH` accept role metadata; only the protected initial administrator may change a role's permission grants. Delegated role managers retain read access to the permissions assigned to roles.
 
 Example create request:
 
@@ -134,7 +134,6 @@ Roles and permissions are many-to-many relationships rather than columns on `use
 - `permissions`: stable permission key, module, and description
 - `user_roles`: assigns one or more roles to a user
 - `role_permissions`: grants permissions to a role
-- `group_permissions`: grants permissions to every active member of a group
 - `group_roles`: links each group to its generated Manager and Member system roles
 
 The system must seed a default permission catalog. The initial catalog contains at least:
@@ -150,14 +149,14 @@ The system must seed a default permission catalog. The initial catalog contains 
 | `groups.manage` | Create, edit, and delete groups |
 | `groups.assign` | Add or remove users from groups |
 | `permissions.read` | View the permission catalog and permission assignments |
-| `permissions.assign` | Grant or revoke existing permissions on roles and groups |
-| `permissions.manage` | Create and edit permission definitions; reserved for the protected administrator |
+| `permissions.assign` | Grant or revoke permissions on custom roles; administrator-only operation |
+| `logs.read` | View request and audit logs |
 
-Modules may seed additional stable permission keys, such as `inventory.write`. Permission definitions are configuration records and may also be created or edited by the protected administrator. A permission definition must not be physically deleted while it is assigned; it should be disabled so historical configuration remains understandable.
+`config/permission.json` is the authoritative catalog. Modules add stable keys there when adding protected routes. Startup validates and synchronizes the file to the database, including removing definitions no longer present in configuration.
 
-A user may hold multiple roles and belong to multiple groups at the same time. Effective permissions are the union of permissions granted by all active assigned roles and all active groups of which the user is an active member. Permission grants are additive; a role or group cannot deny a permission granted by another source.
+A user may hold multiple roles. Effective permissions are the union of permissions granted by every assigned role: if any role grants a requested permission, authorization succeeds. Groups never contribute permissions.
 
-Possessing `permissions.assign` allows a user to configure existing permission grants on roles and groups. It does not allow that user to create permission definitions. Except for the protected administrator, a user may grant or revoke only permissions that the user currently possesses. This prevents delegated administrators from escalating their own access. Changes to permission definitions and assignments must be audited.
+Role permission grants are reserved for the protected initial administrator. Other users cannot change grants even if a role contains `permissions.assign`. Changes to assignments must be audited.
 
 The initial protected administrator's `Admin` role has `grants_all_permissions = 1`. This flag grants every current and future permission without requiring individual assignment. The protected administrator must always retain this role and flag and cannot be disabled, deleted, removed from the role, or restricted by another user.
 
@@ -165,16 +164,15 @@ The initial protected administrator's `Admin` role has `grants_all_permissions =
 
 The detailed implemented contract is documented in [`group-system.md`](./group-system.md).
 
-Groups primarily represent organization membership, such as a department, branch, store, project team, or working group. A group may also receive explicit permission grants through `group_permissions`.
+Groups represent organization membership, such as a department, branch, store, project team, or working group. They do not grant request permissions.
 
 - `groups`: group identity, name, type, parent group, and status
 - `user_groups`: user membership, optional title, and membership dates
-- `group_permissions`: explicit permissions inherited by active group members
 - `group_roles`: the protected Manager and Member roles created with every group
 
-Creating a group automatically creates `<Group Name> Manager` and `<Group Name> Member` roles. The protected administrator may manage every group. A user assigned the Manager role for a group may manage membership only in that group; the role grants no authority over other groups.
+Creating a group automatically creates `<Group Name> Manager` and `<Group Name> Member` roles as membership markers. Managing group membership requires `groups.assign`.
 
-A user may belong to multiple groups. Group names or group types do not implicitly grant access; only records in `group_permissions` do. Parent groups do not automatically inherit permissions from, or grant permissions to, child groups unless a future specification explicitly introduces inheritance.
+A user may belong to multiple groups. Group names, types, membership, and parent relationships do not grant access.
 
 ## 4. Supporting Tables
 
@@ -224,7 +222,7 @@ The first implementation should include:
 6. `role_permissions`
 7. `groups`
 8. `user_groups`
-9. `group_permissions`
+9. `group_roles`
 
 Sessions, password reset, MFA, and audit tables can be added with their corresponding features, although login auditing should be introduced early.
 
@@ -236,6 +234,14 @@ Sessions, password reset, MFA, and audit tables can be added with their correspo
 - A user may have multiple roles, and roles determine permissions.
 - The default `Admin` role belongs only to the protected initial administrator and cannot be assigned to another user.
 - The initial administrator uses reserved employee number `0`.
+
+### 8.1 Personal profile editing
+
+An authenticated user may edit their own `display_name`, `email`, `locale`, `timezone`, and password from **Settings → Personal → My Profile**. The profile also displays the user's assigned roles as read-only information; users cannot assign or remove their own roles.
+
+Every personal-profile update must include `current_password`, even when the new values do not include a password change. The server compares it with the authenticated user's stored password hash before applying any update. A missing or incorrect current password rejects the entire update. The current password must never be logged or stored as plaintext.
+
+Self-service editing does not permit changes to the immutable user ID, account status, `must_change_password`, role assignments, group membership, protected status, or other administrative fields. Users with `users.manage` may continue to edit another user's administrative fields without knowing that user's password. When an administrator edits their own account, the operation is still a personal update and requires the administrator's current password.
 
 ## 9. Open Questions
 

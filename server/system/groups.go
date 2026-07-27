@@ -20,17 +20,16 @@ var (
 )
 
 type Group struct {
-	ID            string       `json:"id"`
-	Name          string       `json:"name"`
-	Type          string       `json:"type"`
-	ParentGroupID *string      `json:"parent_group_id"`
-	Status        string       `json:"status"`
-	CreatedAt     string       `json:"created_at"`
-	UpdatedAt     string       `json:"updated_at"`
-	MemberCount   int          `json:"member_count"`
-	Permissions   []Permission `json:"permissions"`
-	ManagerRoleID string       `json:"manager_role_id"`
-	MemberRoleID  string       `json:"member_role_id"`
+	ID            string  `json:"id"`
+	Name          string  `json:"name"`
+	Type          string  `json:"type"`
+	ParentGroupID *string `json:"parent_group_id"`
+	Status        string  `json:"status"`
+	CreatedAt     string  `json:"created_at"`
+	UpdatedAt     string  `json:"updated_at"`
+	MemberCount   int     `json:"member_count"`
+	ManagerRoleID string  `json:"manager_role_id"`
+	MemberRoleID  string  `json:"member_role_id"`
 }
 
 type GroupMember struct {
@@ -117,7 +116,6 @@ func getGroup(ctx context.Context, db *sql.DB, id string) (*Group, error) {
 	if err != nil {
 		return nil, err
 	}
-	group.Permissions = []Permission{}
 	rows, err := db.QueryContext(ctx, `SELECT role_id, kind FROM group_roles WHERE group_id = ?`, id)
 	if err != nil {
 		return nil, err
@@ -137,27 +135,10 @@ func getGroup(ctx context.Context, db *sql.DB, id string) (*Group, error) {
 	if err := rows.Close(); err != nil {
 		return nil, err
 	}
-	rows, err = db.QueryContext(ctx, `SELECT p.id, p.permission_key, p.module, p.description
-		FROM permissions p JOIN group_permissions gp ON gp.permission_id = p.id
-		WHERE gp.group_id = ? ORDER BY p.permission_key`, id)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	for rows.Next() {
-		var p Permission
-		if err := rows.Scan(&p.ID, &p.PermissionKey, &p.Module, &p.Description); err != nil {
-			return nil, err
-		}
-		group.Permissions = append(group.Permissions, p)
-	}
-	return &group, rows.Err()
+	return &group, nil
 }
 
 func (s *UserService) CreateGroup(ctx context.Context, actorUserID string, input CreateGroupInput) (*Group, error) {
-	if !s.HasPermission(ctx, actorUserID, "groups.manage") {
-		return nil, ErrPermissionDenied
-	}
 	name, groupType, status, err := normalizeGroup(input.Name, input.Type, input.Status)
 	if err != nil {
 		return nil, err
@@ -199,9 +180,6 @@ func (s *UserService) CreateGroup(ctx context.Context, actorUserID string, input
 }
 
 func (s *UserService) UpdateGroup(ctx context.Context, actorUserID, id string, input UpdateGroupInput) (*Group, error) {
-	if !s.HasPermission(ctx, actorUserID, "groups.manage") {
-		return nil, ErrPermissionDenied
-	}
 	db, err := s.open()
 	if err != nil {
 		return nil, err
@@ -252,9 +230,6 @@ func (s *UserService) UpdateGroup(ctx context.Context, actorUserID, id string, i
 }
 
 func (s *UserService) DeleteGroup(ctx context.Context, actorUserID, id string) error {
-	if !s.HasPermission(ctx, actorUserID, "groups.manage") {
-		return ErrPermissionDenied
-	}
 	db, err := s.open()
 	if err != nil {
 		return err
@@ -326,9 +301,6 @@ func (s *UserService) ListGroupMembers(ctx context.Context, actorUserID, groupID
 	if _, err := getGroup(ctx, db, groupID); err != nil {
 		return nil, err
 	}
-	if !canManageGroup(ctx, db, actorUserID, groupID) {
-		return nil, ErrGroupAccess
-	}
 	rows, err := db.QueryContext(ctx, `SELECT u.id, u.display_name, u.email, gr.kind, ug.title, ug.joined_at
 		FROM user_groups ug JOIN users u ON u.id=ug.user_id
 		JOIN group_roles gr ON gr.group_id=ug.group_id
@@ -364,9 +336,6 @@ func (s *UserService) SetGroupMember(ctx context.Context, actorUserID, groupID, 
 	defer db.Close()
 	if _, err := getGroup(ctx, db, groupID); err != nil {
 		return nil, err
-	}
-	if !canManageGroup(ctx, db, actorUserID, groupID) {
-		return nil, ErrGroupAccess
 	}
 	var exists int
 	if err := db.QueryRowContext(ctx, `SELECT COUNT(*) FROM users WHERE id=? AND deleted_at IS NULL`, userID).Scan(&exists); err != nil {
@@ -416,9 +385,6 @@ func (s *UserService) RemoveGroupMember(ctx context.Context, actorUserID, groupI
 	if _, err := getGroup(ctx, db, groupID); err != nil {
 		return err
 	}
-	if !canManageGroup(ctx, db, actorUserID, groupID) {
-		return ErrGroupAccess
-	}
 	tx, err := db.BeginTx(ctx, nil)
 	if err != nil {
 		return err
@@ -436,18 +402,6 @@ func (s *UserService) RemoveGroupMember(ctx context.Context, actorUserID, groupI
 		return err
 	}
 	return tx.Commit()
-}
-
-func canManageGroup(ctx context.Context, db *sql.DB, userID, groupID string) bool {
-	if IsInitialAdministrator(userID) {
-		return true
-	}
-	if hasPermission(ctx, db, userID, "groups.assign") {
-		return true
-	}
-	var count int
-	err := db.QueryRowContext(ctx, `SELECT COUNT(*) FROM user_roles ur JOIN group_roles gr ON gr.role_id=ur.role_id WHERE ur.user_id=? AND gr.group_id=? AND gr.kind='manager'`, userID, groupID).Scan(&count)
-	return err == nil && count > 0
 }
 
 func normalizeGroup(name, groupType, status string) (string, string, string, error) {

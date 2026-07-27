@@ -42,7 +42,7 @@ func createUser(users *system.UserService) http.HandlerFunc {
 			writeJSON(w, http.StatusBadRequest, map[string]string{"error": err.Error()})
 			return
 		}
-		result, err := users.Create(r.Context(), input)
+		result, err := users.Create(r.Context(), authenticatedUserID(r), input)
 		if err != nil {
 			writeSystemError(w, err)
 			return
@@ -60,7 +60,7 @@ func updateUser(users *system.UserService) http.HandlerFunc {
 			writeJSON(w, http.StatusBadRequest, map[string]string{"error": err.Error()})
 			return
 		}
-		result, err := users.Update(r.Context(), r.PathValue("id"), input)
+		result, err := users.Update(r.Context(), authenticatedUserID(r), r.PathValue("id"), input)
 		if err != nil {
 			writeSystemError(w, err)
 			return
@@ -72,7 +72,7 @@ func updateUser(users *system.UserService) http.HandlerFunc {
 
 func deleteUser(users *system.UserService) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		if err := users.Delete(r.Context(), r.PathValue("id")); err != nil {
+		if err := users.Delete(r.Context(), authenticatedUserID(r), r.PathValue("id")); err != nil {
 			writeSystemError(w, err)
 			return
 		}
@@ -106,7 +106,7 @@ func writeSystemError(w http.ResponseWriter, err error) {
 		writeJSON(w, http.StatusNotFound, map[string]string{"error": err.Error()})
 	case errors.Is(err, system.ErrRoleAssigned), errors.Is(err, system.ErrGroupInUse):
 		writeJSON(w, http.StatusConflict, map[string]string{"error": err.Error()})
-	case errors.Is(err, system.ErrRoleProtected), errors.Is(err, system.ErrAdminRequired), errors.Is(err, system.ErrGroupAccess), errors.Is(err, system.ErrPermissionDenied):
+	case errors.Is(err, system.ErrRoleProtected), errors.Is(err, system.ErrAdminRequired), errors.Is(err, system.ErrGroupAccess), errors.Is(err, system.ErrPermissionDenied), errors.Is(err, system.ErrCurrentPasswordWrong):
 		writeJSON(w, http.StatusForbidden, map[string]string{"error": err.Error()})
 	case strings.Contains(err.Error(), "UNIQUE constraint failed"):
 		writeJSON(w, http.StatusConflict, map[string]string{"error": "data already exists"})

@@ -9,6 +9,8 @@ import Roles from "@/views/Settings/Roles";
 import RoleDetail from "@/views/Settings/Roles/RoleDetail";
 import Groups from "@/views/Settings/Groups";
 import GroupDetail from "@/views/Settings/Groups/GroupDetail";
+import Users from "@/views/Settings/Users";
+import UserDetail from "@/views/Settings/Users/UserDetail";
 
 const routes: RouteObject[] = [
   {
@@ -39,6 +41,7 @@ const routes: RouteObject[] = [
             index: true,
             element: <Navigate to="access-control/roles" replace />,
           },
+          { path: "profile/:userId", element: <UserDetail /> },
           {
             path: "access-control",
             children: [
@@ -50,6 +53,8 @@ const routes: RouteObject[] = [
                 path: "roles",
                 element: <Roles />,
               },
+              { path: "users", element: <Users /> },
+              { path: "users/:userId", element: <UserDetail /> },
               {
                 path: "roles/:roleId",
                 element: <RoleDetail />,
