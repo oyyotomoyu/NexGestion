@@ -1,0 +1,59 @@
+{
+  "permissions": [
+    {
+      "key": "users.read",
+      "module": "users",
+      "description": "View users and employee profiles"
+    },
+    {
+      "key": "users.manage",
+      "module": "users",
+      "description": "Create, update, and delete users"
+    },
+    {
+      "key": "roles.read",
+      "module": "roles",
+      "description": "View roles and their assigned permissions"
+    },
+    {
+      "key": "roles.manage",
+      "module": "roles",
+      "description": "Create, update, and delete custom roles"
+    },
+    {
+      "key": "roles.assign",
+      "module": "roles",
+      "description": "Assign custom roles to users"
+    },
+    {
+      "key": "permissions.read",
+      "module": "permissions",
+      "description": "View the permission catalog"
+    },
+    {
+      "key": "permissions.assign",
+      "module": "permissions",
+      "description": "Assign permissions to custom roles"
+    },
+    {
+      "key": "groups.read",
+      "module": "groups",
+      "description": "View groups and group members"
+    },
+    {
+      "key": "groups.manage",
+      "module": "groups",
+      "description": "Create, update, and delete groups"
+    },
+    {
+      "key": "groups.assign",
+      "module": "groups",
+      "description": "Manage group membership"
+    },
+    {
+      "key": "logs.read",
+      "module": "logs",
+      "description": "View audit and request logs"
+    }
+  ]
+}
