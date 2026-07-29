@@ -5,7 +5,8 @@ let mockGroups: Group[] = [
   {
     id: "group-operations",
     name: "Operations",
-    type: "department",
+    type: "organization",
+    organization_level: 1,
     parent_group_id: null,
     status: "active",
     created_at: "2025-02-03T03:00:00.000Z",
@@ -17,7 +18,8 @@ let mockGroups: Group[] = [
   {
     id: "group-people",
     name: "People",
-    type: "department",
+    type: "project",
+    organization_level: null,
     parent_group_id: null,
     status: "active",
     created_at: "2026-07-01T06:30:00.000Z",
@@ -31,11 +33,11 @@ let mockGroups: Group[] = [
 let mockGroupMembers: Record<string, GroupMember[]> = {
   "group-operations": [{
     user_id: "1", display_name: "Mina Lin", email: "mina.lin@nexgestion.test",
-    role: "manager", title: "Manager", joined_at: "2025-02-03",
+    role: "manager", title: "Manager", joined_at: "2025-02-03", is_primary_organization: true,
   }],
   "group-people": [{
     user_id: "2", display_name: "Jordan Wang", email: "jordan.wang@nexgestion.test",
-    role: "member", title: "Specialist", joined_at: "2026-07-01",
+    role: "member", title: "Specialist", joined_at: "2026-07-01", is_primary_organization: false,
   }],
 };
 
@@ -57,7 +59,8 @@ export function createGroup(input: CreateGroupInput) {
   if (import.meta.env.DEV) {
     const now = new Date().toISOString();
     const group: Group = {
-      id: crypto.randomUUID(), name: input.name.trim(), type: input.type.trim(),
+      id: crypto.randomUUID(), name: input.name.trim(), type: input.type,
+      organization_level: input.type === "organization" ? input.organization_level ?? 1 : null,
       parent_group_id: input.parent_group_id || null, status: input.status || "active",
       created_at: now, updated_at: now, member_count: 0,
       manager_role_id: crypto.randomUUID(), member_role_id: crypto.randomUUID(),
@@ -76,7 +79,10 @@ export function updateGroup(id: string, input: UpdateGroupInput) {
     const updated: Group = {
       ...current,
       name: input.name?.trim() || current.name,
-      type: input.type?.trim() || current.type,
+      type: input.type || current.type,
+      organization_level: (input.type ?? current.type) === "organization"
+        ? input.organization_level ?? current.organization_level ?? 1
+        : null,
       parent_group_id: input.parent_group_id === undefined ? current.parent_group_id : input.parent_group_id || null,
       status: input.status || current.status,
       updated_at: new Date().toISOString(),

@@ -20,45 +20,50 @@ var (
 )
 
 type Group struct {
-	ID            string  `json:"id"`
-	Name          string  `json:"name"`
-	Type          string  `json:"type"`
-	ParentGroupID *string `json:"parent_group_id"`
-	Status        string  `json:"status"`
-	CreatedAt     string  `json:"created_at"`
-	UpdatedAt     string  `json:"updated_at"`
-	MemberCount   int     `json:"member_count"`
-	ManagerRoleID string  `json:"manager_role_id"`
-	MemberRoleID  string  `json:"member_role_id"`
+	ID                string  `json:"id"`
+	Name              string  `json:"name"`
+	Type              string  `json:"type"`
+	OrganizationLevel *int    `json:"organization_level"`
+	ParentGroupID     *string `json:"parent_group_id"`
+	Status            string  `json:"status"`
+	CreatedAt         string  `json:"created_at"`
+	UpdatedAt         string  `json:"updated_at"`
+	MemberCount       int     `json:"member_count"`
+	ManagerRoleID     string  `json:"manager_role_id"`
+	MemberRoleID      string  `json:"member_role_id"`
 }
 
 type GroupMember struct {
-	UserID      string  `json:"user_id"`
-	DisplayName string  `json:"display_name"`
-	Email       string  `json:"email"`
-	Role        string  `json:"role"`
-	Title       *string `json:"title"`
-	JoinedAt    *string `json:"joined_at"`
+	UserID                string  `json:"user_id"`
+	DisplayName           string  `json:"display_name"`
+	Email                 string  `json:"email"`
+	Role                  string  `json:"role"`
+	Title                 *string `json:"title"`
+	JoinedAt              *string `json:"joined_at"`
+	IsPrimaryOrganization bool    `json:"is_primary_organization"`
 }
 
 type SetGroupMemberInput struct {
-	Role     string  `json:"role"`
-	Title    *string `json:"title"`
-	JoinedAt *string `json:"joined_at"`
+	Role                  string  `json:"role"`
+	Title                 *string `json:"title"`
+	JoinedAt              *string `json:"joined_at"`
+	IsPrimaryOrganization bool    `json:"is_primary_organization"`
 }
 
 type CreateGroupInput struct {
-	Name          string  `json:"name"`
-	Type          string  `json:"type"`
-	ParentGroupID *string `json:"parent_group_id"`
-	Status        string  `json:"status"`
+	Name              string  `json:"name"`
+	Type              string  `json:"type"`
+	OrganizationLevel *int    `json:"organization_level"`
+	ParentGroupID     *string `json:"parent_group_id"`
+	Status            string  `json:"status"`
 }
 
 type UpdateGroupInput struct {
-	Name          *string `json:"name"`
-	Type          *string `json:"type"`
-	ParentGroupID *string `json:"parent_group_id"`
-	Status        *string `json:"status"`
+	Name              *string `json:"name"`
+	Type              *string `json:"type"`
+	OrganizationLevel *int    `json:"organization_level"`
+	ParentGroupID     *string `json:"parent_group_id"`
+	Status            *string `json:"status"`
 }
 
 func (s *UserService) ListGroups(ctx context.Context) ([]Group, error) {
@@ -105,11 +110,11 @@ func (s *UserService) GetGroup(ctx context.Context, id string) (*Group, error) {
 
 func getGroup(ctx context.Context, db *sql.DB, id string) (*Group, error) {
 	var group Group
-	err := db.QueryRowContext(ctx, `SELECT g.id, g.name, g.type, g.parent_group_id, g.status,
+	err := db.QueryRowContext(ctx, `SELECT g.id, g.name, g.type, g.organization_level, g.parent_group_id, g.status,
 		g.created_at, g.updated_at, COUNT(ug.user_id)
 		FROM groups g LEFT JOIN user_groups ug ON ug.group_id = g.id AND ug.left_at IS NULL
 		WHERE g.id = ? GROUP BY g.id`, id).Scan(&group.ID, &group.Name, &group.Type,
-		&group.ParentGroupID, &group.Status, &group.CreatedAt, &group.UpdatedAt, &group.MemberCount)
+		&group.OrganizationLevel, &group.ParentGroupID, &group.Status, &group.CreatedAt, &group.UpdatedAt, &group.MemberCount)
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil, ErrGroupNotFound
 	}
@@ -149,7 +154,7 @@ func (s *UserService) CreateGroup(ctx context.Context, actorUserID string, input
 		return nil, err
 	}
 	defer db.Close()
-	if err := validateGroupParent(ctx, db, "", parent); err != nil {
+	if err := validateGroupStructure(ctx, db, "", groupType, input.OrganizationLevel, parent); err != nil {
 		return nil, err
 	}
 	now, id := time.Now().UTC().Format(time.RFC3339), uuid.NewString()
@@ -158,8 +163,8 @@ func (s *UserService) CreateGroup(ctx context.Context, actorUserID string, input
 		return nil, err
 	}
 	defer tx.Rollback()
-	if _, err := tx.ExecContext(ctx, `INSERT INTO groups (id, name, type, parent_group_id, status, created_at, updated_at)
-		VALUES (?, ?, ?, ?, ?, ?, ?)`, id, name, groupType, parent, status, now, now); err != nil {
+	if _, err := tx.ExecContext(ctx, `INSERT INTO groups (id, name, type, organization_level, parent_group_id, status, created_at, updated_at)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?)`, id, name, groupType, input.OrganizationLevel, parent, status, now, now); err != nil {
 		return nil, fmt.Errorf("create group: %w", err)
 	}
 	managerRoleID, memberRoleID := uuid.NewString(), uuid.NewString()
@@ -191,11 +196,15 @@ func (s *UserService) UpdateGroup(ctx context.Context, actorUserID, id string, i
 	}
 	name, groupType, status := current.Name, current.Type, current.Status
 	parent := current.ParentGroupID
+	level := current.OrganizationLevel
 	if input.Name != nil {
 		name = *input.Name
 	}
 	if input.Type != nil {
 		groupType = *input.Type
+	}
+	if input.OrganizationLevel != nil {
+		level = input.OrganizationLevel
 	}
 	if input.Status != nil {
 		status = *input.Status
@@ -203,12 +212,26 @@ func (s *UserService) UpdateGroup(ctx context.Context, actorUserID, id string, i
 	if input.ParentGroupID != nil {
 		parent = normalizeGroupParent(input.ParentGroupID)
 	}
+	if strings.TrimSpace(groupType) == "project" {
+		level, parent = nil, nil
+	}
 	name, groupType, status, err = normalizeGroup(name, groupType, status)
 	if err != nil {
 		return nil, err
 	}
-	if err := validateGroupParent(ctx, db, id, parent); err != nil {
+	if groupType != current.Type && current.MemberCount > 0 {
+		return nil, errors.New("group type cannot change while the group has members")
+	}
+	if err := validateGroupStructure(ctx, db, id, groupType, level, parent); err != nil {
 		return nil, err
+	}
+	var invalidChildren int
+	if err := db.QueryRowContext(ctx, `SELECT COUNT(*) FROM groups WHERE parent_group_id=? AND
+		(type<>'organization' OR organization_level<>?)`, id, valueOrZero(level)+1).Scan(&invalidChildren); err != nil {
+		return nil, err
+	}
+	if invalidChildren > 0 {
+		return nil, ErrInvalidParent
 	}
 	now := time.Now().UTC().Format(time.RFC3339)
 	tx, err := db.BeginTx(ctx, nil)
@@ -216,8 +239,8 @@ func (s *UserService) UpdateGroup(ctx context.Context, actorUserID, id string, i
 		return nil, err
 	}
 	defer tx.Rollback()
-	if _, err := tx.ExecContext(ctx, `UPDATE groups SET name=?, type=?, parent_group_id=?, status=?, updated_at=? WHERE id=?`,
-		name, groupType, parent, status, now, id); err != nil {
+	if _, err := tx.ExecContext(ctx, `UPDATE groups SET name=?, type=?, organization_level=?, parent_group_id=?, status=?, updated_at=? WHERE id=?`,
+		name, groupType, level, parent, status, now, id); err != nil {
 		return nil, fmt.Errorf("update group: %w", err)
 	}
 	if _, err := tx.ExecContext(ctx, `UPDATE roles SET name=? || CASE gr.kind WHEN 'manager' THEN ' Manager' ELSE ' Member' END, description=CASE gr.kind WHEN 'manager' THEN 'Manages members of the ' || ? || ' group' ELSE 'Member of the ' || ? || ' group' END, updated_at=? FROM group_roles gr WHERE roles.id=gr.role_id AND gr.group_id=?`, name, name, name, now, id); err != nil {
@@ -301,7 +324,7 @@ func (s *UserService) ListGroupMembers(ctx context.Context, actorUserID, groupID
 	if _, err := getGroup(ctx, db, groupID); err != nil {
 		return nil, err
 	}
-	rows, err := db.QueryContext(ctx, `SELECT u.id, u.display_name, u.email, gr.kind, ug.title, ug.joined_at
+	rows, err := db.QueryContext(ctx, `SELECT u.id, u.display_name, u.email, gr.kind, ug.title, ug.joined_at,ug.is_primary_organization
 		FROM user_groups ug JOIN users u ON u.id=ug.user_id
 		JOIN group_roles gr ON gr.group_id=ug.group_id
 		JOIN user_roles ur ON ur.user_id=u.id AND ur.role_id=gr.role_id
@@ -313,7 +336,7 @@ func (s *UserService) ListGroupMembers(ctx context.Context, actorUserID, groupID
 	result := []GroupMember{}
 	for rows.Next() {
 		var m GroupMember
-		if err := rows.Scan(&m.UserID, &m.DisplayName, &m.Email, &m.Role, &m.Title, &m.JoinedAt); err != nil {
+		if err := rows.Scan(&m.UserID, &m.DisplayName, &m.Email, &m.Role, &m.Title, &m.JoinedAt, &m.IsPrimaryOrganization); err != nil {
 			return nil, err
 		}
 		result = append(result, m)
@@ -334,7 +357,8 @@ func (s *UserService) SetGroupMember(ctx context.Context, actorUserID, groupID, 
 		return nil, err
 	}
 	defer db.Close()
-	if _, err := getGroup(ctx, db, groupID); err != nil {
+	group, err := getGroup(ctx, db, groupID)
+	if err != nil {
 		return nil, err
 	}
 	var exists int
@@ -358,8 +382,21 @@ func (s *UserService) SetGroupMember(ctx context.Context, actorUserID, groupID, 
 		return nil, err
 	}
 	defer tx.Rollback()
-	if _, err := tx.ExecContext(ctx, `INSERT INTO user_groups (user_id, group_id, title, joined_at, left_at, created_at) VALUES (?, ?, ?, ?, NULL, ?)
-		ON CONFLICT(user_id, group_id) DO UPDATE SET title=excluded.title, joined_at=excluded.joined_at, left_at=NULL`, userID, groupID, normalizeOptionalText(input.Title), joinedAt, now); err != nil {
+	isPrimary := input.IsPrimaryOrganization && group.Type == "organization"
+	if group.Type == "organization" && !isPrimary {
+		var primaryCount int
+		if err := tx.QueryRowContext(ctx, `SELECT COUNT(*) FROM user_groups WHERE user_id=? AND is_primary_organization=1 AND left_at IS NULL`, userID).Scan(&primaryCount); err != nil {
+			return nil, err
+		}
+		isPrimary = primaryCount == 0
+	}
+	if isPrimary {
+		if _, err := tx.ExecContext(ctx, `UPDATE user_groups SET is_primary_organization=0 WHERE user_id=?`, userID); err != nil {
+			return nil, err
+		}
+	}
+	if _, err := tx.ExecContext(ctx, `INSERT INTO user_groups (user_id, group_id, title, joined_at, left_at, is_primary_organization, created_at) VALUES (?, ?, ?, ?, NULL, ?, ?)
+		ON CONFLICT(user_id, group_id) DO UPDATE SET title=excluded.title, joined_at=excluded.joined_at, left_at=NULL,is_primary_organization=excluded.is_primary_organization`, userID, groupID, normalizeOptionalText(input.Title), joinedAt, isPrimary, now); err != nil {
 		return nil, err
 	}
 	if _, err := tx.ExecContext(ctx, `DELETE FROM user_roles WHERE user_id=? AND role_id IN (SELECT role_id FROM group_roles WHERE group_id=?)`, userID, groupID); err != nil {
@@ -372,7 +409,7 @@ func (s *UserService) SetGroupMember(ctx context.Context, actorUserID, groupID, 
 		return nil, err
 	}
 	var member GroupMember
-	err = db.QueryRowContext(ctx, `SELECT u.id,u.display_name,u.email,?,ug.title,ug.joined_at FROM users u JOIN user_groups ug ON ug.user_id=u.id WHERE u.id=? AND ug.group_id=?`, roleKind, userID, groupID).Scan(&member.UserID, &member.DisplayName, &member.Email, &member.Role, &member.Title, &member.JoinedAt)
+	err = db.QueryRowContext(ctx, `SELECT u.id,u.display_name,u.email,?,ug.title,ug.joined_at,ug.is_primary_organization FROM users u JOIN user_groups ug ON ug.user_id=u.id WHERE u.id=? AND ug.group_id=?`, roleKind, userID, groupID).Scan(&member.UserID, &member.DisplayName, &member.Email, &member.Role, &member.Title, &member.JoinedAt, &member.IsPrimaryOrganization)
 	return &member, err
 }
 
@@ -390,6 +427,12 @@ func (s *UserService) RemoveGroupMember(ctx context.Context, actorUserID, groupI
 		return err
 	}
 	defer tx.Rollback()
+	var wasPrimary bool
+	if err := tx.QueryRowContext(ctx, `SELECT is_primary_organization FROM user_groups WHERE group_id=? AND user_id=?`, groupID, userID).Scan(&wasPrimary); errors.Is(err, sql.ErrNoRows) {
+		return ErrMemberNotFound
+	} else if err != nil {
+		return err
+	}
 	result, err := tx.ExecContext(ctx, `DELETE FROM user_groups WHERE group_id=? AND user_id=?`, groupID, userID)
 	if err != nil {
 		return err
@@ -401,6 +444,16 @@ func (s *UserService) RemoveGroupMember(ctx context.Context, actorUserID, groupI
 	if _, err := tx.ExecContext(ctx, `DELETE FROM user_roles WHERE user_id=? AND role_id IN (SELECT role_id FROM group_roles WHERE group_id=?)`, userID, groupID); err != nil {
 		return err
 	}
+	if wasPrimary {
+		if _, err := tx.ExecContext(ctx, `UPDATE user_groups SET is_primary_organization=1
+			WHERE user_id=? AND group_id=(
+				SELECT ug.group_id FROM user_groups ug JOIN groups g ON g.id=ug.group_id
+				WHERE ug.user_id=? AND ug.left_at IS NULL AND g.type='organization' AND g.status='active'
+				ORDER BY g.organization_level DESC,g.name COLLATE NOCASE LIMIT 1
+			)`, userID, userID); err != nil {
+			return err
+		}
+	}
 	return tx.Commit()
 }
 
@@ -411,6 +464,9 @@ func normalizeGroup(name, groupType, status string) (string, string, string, err
 	}
 	if groupType == "" {
 		return "", "", "", errors.New("group type is required")
+	}
+	if groupType != "organization" && groupType != "project" {
+		return "", "", "", errors.New("invalid group type: must be organization or project")
 	}
 	if status == "" {
 		status = "active"
@@ -432,18 +488,38 @@ func normalizeGroupParent(value *string) *string {
 	return &trimmed
 }
 
-func validateGroupParent(ctx context.Context, db *sql.DB, id string, parent *string) error {
-	if parent == nil {
+func validateGroupStructure(ctx context.Context, db *sql.DB, id, groupType string, level *int, parent *string) error {
+	if groupType == "project" {
+		if level != nil || parent != nil {
+			return ErrInvalidParent
+		}
 		return nil
+	}
+	if level == nil || *level < 1 || *level > 5 {
+		return errors.New("invalid organization level: must be between 1 and 5")
+	}
+	if *level == 1 {
+		if parent != nil {
+			return ErrInvalidParent
+		}
+		return nil
+	}
+	if parent == nil {
+		return ErrInvalidParent
 	}
 	if *parent == id {
 		return ErrInvalidParent
 	}
-	var exists int
-	if err := db.QueryRowContext(ctx, `SELECT COUNT(*) FROM groups WHERE id=?`, *parent).Scan(&exists); err != nil {
+	var parentType string
+	var parentLevel *int
+	var parentStatus string
+	if err := db.QueryRowContext(ctx, `SELECT type,organization_level,status FROM groups WHERE id=?`, *parent).Scan(&parentType, &parentLevel, &parentStatus); err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return ErrInvalidParent
+		}
 		return err
 	}
-	if exists == 0 {
+	if parentType != "organization" || parentStatus != "active" || parentLevel == nil || *parentLevel != *level-1 {
 		return ErrInvalidParent
 	}
 	for cursor := parent; cursor != nil; {
@@ -457,4 +533,11 @@ func validateGroupParent(ctx context.Context, db *sql.DB, id string, parent *str
 		cursor = next
 	}
 	return nil
+}
+
+func valueOrZero(value *int) int {
+	if value == nil {
+		return 0
+	}
+	return *value
 }

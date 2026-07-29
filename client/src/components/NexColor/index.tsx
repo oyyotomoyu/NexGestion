@@ -20,6 +20,7 @@ export interface NexColors {
   border: string;
   focusRing: string;
   shadow: string;
+  overlay: string;
   success: string;
   warning: string;
   danger: string;

@@ -9,4 +9,16 @@
 .group-table th, .group-table td { padding: 14px 16px; border-bottom: 1px solid var(--color-border); text-align: left; }
 .group-table th { background: var(--color-surface-muted); }
 .group-table tbody tr:last-child td { border-bottom: 0; }
-@media (max-width: 720px) { .group-form__fields { grid-template-columns: 1fr; } .group-form { padding: 18px; } }
+@media (max-width: 720px) {
+  .group-form__fields { grid-template-columns: 1fr; }
+  .group-form { padding: 16px; }
+  .group-form .nex-button { width: 100%; }
+  .group-table-wrap { overflow: visible; border: 0; border-radius: 0; background: var(--color-background); }
+  .group-table { min-width: 0; }
+  .group-table thead { display: none; }
+  .group-table, .group-table tbody, .group-table tr, .group-table td { display: block; width: 100%; }
+  .group-table tbody { display: grid; gap: 12px; }
+  .group-table tr { overflow: hidden; border: 1px solid var(--color-border); border-radius: 10px; background: var(--color-surface); }
+  .group-table td { display: grid; grid-template-columns: minmax(96px, 36%) minmax(0, 1fr); gap: 12px; padding: 12px 14px; overflow-wrap: anywhere; }
+  .group-table td::before { content: attr(data-label); color: var(--color-muted); font-size: 12px; font-weight: 600; line-height: 18px; }
+}

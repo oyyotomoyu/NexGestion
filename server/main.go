@@ -44,7 +44,9 @@ func main() {
 
 	mux := http.NewServeMux()
 	users := system.NewUserService(databaseDirectory)
-	apis.InitRouter(mux, users, system.NewAuthService(users), logService)
+	attendance := system.NewAttendanceService(databaseDirectory, getAttendanceReportDirectory(), users)
+	apis.InitRouter(mux, users, attendance, system.NewAuthService(users), logService)
+	go runAttendanceMaintenance(attendance, logService)
 	mux.Handle("/", spaHandler(distDir))
 
 	server := &http.Server{
@@ -58,6 +60,28 @@ func main() {
 
 	if err := server.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
 		log.Fatalf("server failed: %v", err)
+	}
+}
+
+func getAttendanceReportDirectory() string {
+	directory := strings.TrimSpace(os.Getenv("ATTENDANCE_REPORT_DIR"))
+	if directory == "" {
+		return filepath.Join("reports", "attendance")
+	}
+	return directory
+}
+
+func runAttendanceMaintenance(attendance *system.AttendanceService, logService *applogs.Service) {
+	run := func() {
+		if err := attendance.RunMaintenance(context.Background()); err != nil {
+			_ = logService.Log("error", "attendance maintenance failed: "+err.Error())
+		}
+	}
+	run()
+	ticker := time.NewTicker(time.Hour)
+	defer ticker.Stop()
+	for range ticker.C {
+		run()
 	}
 }
 

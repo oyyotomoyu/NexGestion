@@ -1,9 +1,12 @@
 export type GroupStatus = "active" | "inactive";
+export type GroupType = "organization" | "project";
+export type OrganizationLevel = 1 | 2 | 3 | 4 | 5;
 
 export interface Group {
   id: string;
   name: string;
-  type: string;
+  type: GroupType;
+  organization_level: OrganizationLevel | null;
   parent_group_id: string | null;
   status: GroupStatus;
   created_at: string;
@@ -22,24 +25,28 @@ export interface GroupMember {
   role: GroupMemberRole;
   title: string | null;
   joined_at: string | null;
+  is_primary_organization: boolean;
 }
 
 export interface SetGroupMemberInput {
   role?: GroupMemberRole;
   title?: string;
   joined_at?: string;
+  is_primary_organization?: boolean;
 }
 
 export interface CreateGroupInput {
   name: string;
-  type: string;
+  type: GroupType;
+  organization_level?: OrganizationLevel;
   parent_group_id?: string;
   status?: GroupStatus;
 }
 
 export interface UpdateGroupInput {
   name?: string;
-  type?: string;
+  type?: GroupType;
+  organization_level?: OrganizationLevel;
   parent_group_id?: string;
   status?: GroupStatus;
 }

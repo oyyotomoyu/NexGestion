@@ -1,0 +1,16 @@
+{
+  "leave_types": [
+    { "key": "sick_leave", "label": "Sick leave" },
+    { "key": "personal_leave", "label": "Personal leave" },
+    { "key": "annual_leave", "label": "Annual leave (paid leave)" },
+    { "key": "official_leave", "label": "Official leave" },
+    { "key": "maternity_leave", "label": "Maternity leave" },
+    { "key": "paternity_leave", "label": "Paternity leave" },
+    { "key": "parental_leave", "label": "Parental leave" },
+    { "key": "bereavement_leave", "label": "Bereavement leave" },
+    { "key": "menstrual_leave", "label": "Menstrual leave" },
+    { "key": "marriage_leave", "label": "Marriage leave" },
+    { "key": "unpaid_leave", "label": "Unpaid leave" },
+    { "key": "other", "label": "Other" }
+  ]
+}

@@ -12,7 +12,7 @@ import (
 // API handlers belong in this package and may call the system package to
 // perform application operations. The router itself is only responsible for
 // directing requests to the correct handler.
-func InitRouter(router *http.ServeMux, users *system.UserService, auth *system.AuthService, logService *applogs.Service) {
+func InitRouter(router *http.ServeMux, users *system.UserService, attendance *system.AttendanceService, auth *system.AuthService, logService *applogs.Service) {
 	catalog, err := system.LoadPermissionCatalog()
 	if err != nil {
 		panic("load permission catalog: " + err.Error())
@@ -29,6 +29,9 @@ func InitRouter(router *http.ServeMux, users *system.UserService, auth *system.A
 			panic("API route uses undefined permission: " + permission)
 		}
 		return requireAuth(auth, withRequestLogger(logService, requirePermission(users, permission, handler)))
+	}
+	authenticated := func(handler http.HandlerFunc) http.HandlerFunc {
+		return requireAuth(auth, withRequestLogger(logService, handler))
 	}
 	router.HandleFunc("GET /api/auth/me", protected("users.read", me(users)))
 	router.HandleFunc("POST /api/auth/logout", protected("users.read", logout(auth)))
@@ -58,6 +61,21 @@ func InitRouter(router *http.ServeMux, users *system.UserService, auth *system.A
 	router.HandleFunc("DELETE /api/groups/{id}/members/{userId}", protected("groups.assign", removeGroupMember(users)))
 	router.HandleFunc("GET /api/permissions", protected("permissions.read", listPermissions(users)))
 	router.HandleFunc("GET /api/logs", protected("logs.read", readLogs(logService)))
+	router.HandleFunc("GET /api/attendance/today", protected("attendance.read.self", attendanceToday(attendance)))
+	router.HandleFunc("POST /api/attendance/today/sign-in", protected("attendance.clock.self", attendanceSignIn(attendance)))
+	router.HandleFunc("POST /api/attendance/today/sign-out", protected("attendance.clock.self", attendanceSignOut(attendance)))
+	router.HandleFunc("GET /api/attendance/days", protected("attendance.read.self", attendanceDays(attendance, true)))
+	router.HandleFunc("GET /api/attendance/leave-types", protected("attendance.read.self", attendanceLeaveTypes()))
+	router.HandleFunc("GET /api/attendance/leave-requests", protected("attendance.read.self", attendanceLeaveRequests(attendance)))
+	router.HandleFunc("POST /api/attendance/leave-requests", protected("attendance.clock.self", applyAttendanceLeave(attendance)))
+	router.HandleFunc("GET /api/attendance/leave-approvals", authenticated(attendanceLeaveApprovals(attendance)))
+	router.HandleFunc("PATCH /api/attendance/leave-approvals/{id}", authenticated(decideAttendanceLeave(attendance)))
+	router.HandleFunc("GET /api/attendance/monthly/{month}", protected("attendance.read.self", attendanceSelfMonthly(attendance)))
+	router.HandleFunc("GET /api/attendance/users/{userId}/days", protected("attendance.read", attendanceDays(attendance, false)))
+	router.HandleFunc("GET /api/attendance/reports/{month}", protected("attendance.reports.read", attendanceMonthlyReports(attendance)))
+	router.HandleFunc("POST /api/attendance/reports/{month}/generate", protected("attendance.manage", generateAttendanceMonthlyReport(attendance)))
+	router.HandleFunc("GET /api/attendance/reports/{month}/csv", protected("attendance.reports.read", downloadAttendanceCSV(attendance)))
+	router.HandleFunc("PATCH /api/attendance/days/{id}", protected("attendance.manage", correctAttendanceDay(attendance)))
 
 	// Keep unknown API paths inside the API layer instead of falling through to
 	// the SPA handler.

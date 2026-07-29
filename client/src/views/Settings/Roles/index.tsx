@@ -125,13 +125,13 @@ export default function Roles() {
             <tbody>
               {roles.map((role) => (
                 <tr key={role.id}>
-                  <td>
+                  <td data-label={t("global.k_Settings_Roles_Label_Title")}>
                     <Link to={encodeURIComponent(role.id)}>
                       <NexText as="span" weight={600} color="primary">{role.title}</NexText>
                     </Link>
                   </td>
-                  <td><NexText as="span" color="muted">{role.description || t("global.k_Settings_Roles_NoDescription")}</NexText></td>
-                  <td>
+                  <td data-label={t("global.k_Settings_Roles_Label_Description")}><NexText as="span" color="muted">{role.description || t("global.k_Settings_Roles_NoDescription")}</NexText></td>
+                  <td data-label={t("global.k_Settings_Roles_Label_Type")}>
                     <span className={`role-badge role-badge--${role.is_system ? "system" : "custom"}`}>
                       <NexText as="span" variant="caption" color="inherit" weight={600}>
                         {role.is_system
@@ -140,14 +140,14 @@ export default function Roles() {
                       </NexText>
                     </span>
                   </td>
-                  <td>
+                  <td data-label={t("global.k_Settings_Roles_PermissionsTitle")}>
                     <NexText as="span" color="muted">
                       {role.grants_all_permissions
                         ? t("global.k_Settings_Roles_AllPermissions")
                         : t("global.k_Settings_Roles_PermissionCount", { count: role.permissions.length })}
                     </NexText>
                   </td>
-                  <td className="role-table__actions-cell">
+                  <td className="role-table__actions-cell" data-label={t("global.k_Common_Actions")}>
                     {canManage && !role.is_system ? (
                       <div className="role-table__actions">
                         <NexButton

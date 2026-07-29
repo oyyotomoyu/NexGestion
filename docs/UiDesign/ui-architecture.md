@@ -156,6 +156,66 @@ Guidelines:
 - Sidebar and header state should be managed through store or layout-level state depending on scope.
 - Layouts should not contain business-specific form or table logic.
 
+### 6.1 Responsive Layout Contract
+
+Mobile is a supported first-class layout, not a scaled desktop canvas. Every new
+view must be usable without horizontal page scrolling at a CSS viewport width of
+320px or wider.
+
+NexGestion uses these layout ranges:
+
+| Range | Expected layout |
+| --- | --- |
+| `0–720px` | Phone: single-column shell, top app bar with navigation drawer, stacked forms, card-style data records |
+| `721–800px` | Small tablet: single-column settings content with compact navigation |
+| `801px+` | Desktop: persistent sidebar, settings side navigation, multi-column forms and tables |
+
+At phone widths:
+
+- `AppLayout` replaces the persistent sidebar with a compact, sticky top app bar.
+- A 44px-minimum menu button opens the primary navigation as an off-canvas drawer.
+- The drawer overlays rather than resizes page content, includes a dismissing
+  backdrop and close button, closes after navigation and on Escape, moves focus to
+  its close control, and prevents background scrolling while open.
+- Primary application links remain a vertical list in the drawer.
+- The language selector stays at the bottom of the drawer and must not force overflow.
+- Main content uses 16px inline spacing, reduced to 12px on very narrow phones.
+- Settings navigation becomes a horizontally scrollable row of route tabs. Its
+  section labels remain available to assistive technology but are visually hidden.
+- Settings navigation and page content must never render as adjacent columns.
+- Multi-column forms become one column and primary form actions become full width.
+- Data tables become stacked record cards. Each cell must provide a localized
+  `data-label` matching its desktop column heading.
+
+Do not solve mobile layouts by applying a desktop `min-width` to the whole page.
+Horizontal scrolling is acceptable only for a deliberately scrollable local
+control, such as the settings tab row, and must not affect the document viewport.
+
+### 6.2 Mobile Interaction Requirements
+
+- Interactive controls must have a minimum target height of 44px on phone layouts.
+- Form controls use at least 16px text to avoid automatic viewport zoom on mobile Safari.
+- Long identifiers, email addresses, translated labels, and role names must wrap
+  within their card or form instead of widening the page.
+- Destructive and primary action groups must wrap; form actions become full-width
+  when space is constrained.
+- Navigation state must remain visually clear in every language.
+- Hover styling may enhance desktop use but cannot be the only indication of an action.
+
+### 6.3 Responsive Verification
+
+Every changed view must be checked at minimum at:
+
+- 320 × 568
+- 375 × 667
+- 400 × 800
+- 768 × 1024
+- 1280 × 800
+
+Verification covers English, Traditional Chinese, and Japanese; browser zoom at
+200%; keyboard focus; no document-level horizontal overflow; readable card labels;
+and access to every action without relying on hover.
+
 ## 7. Components
 
 `src/components` should contain reusable UI building blocks.

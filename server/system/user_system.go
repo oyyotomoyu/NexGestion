@@ -92,7 +92,8 @@ func userDatabaseSpec() DatabaseSpec {
 			`CREATE TABLE IF NOT EXISTS groups (
 				id TEXT PRIMARY KEY,
 				name TEXT NOT NULL COLLATE NOCASE UNIQUE,
-				type TEXT NOT NULL,
+				type TEXT NOT NULL CHECK (type IN ('organization', 'project')),
+				organization_level INTEGER CHECK (organization_level BETWEEN 1 AND 5),
 				parent_group_id TEXT REFERENCES groups(id),
 				status TEXT NOT NULL DEFAULT 'active',
 				created_at TEXT NOT NULL,
@@ -104,6 +105,7 @@ func userDatabaseSpec() DatabaseSpec {
 				title TEXT,
 				joined_at TEXT,
 				left_at TEXT,
+				is_primary_organization INTEGER NOT NULL DEFAULT 0 CHECK (is_primary_organization IN (0, 1)),
 				created_at TEXT NOT NULL,
 				PRIMARY KEY (user_id, group_id)
 			)`,
@@ -183,9 +185,87 @@ func userDatabaseSpec() DatabaseSpec {
 				SELECT RAISE(ABORT, 'protected user cannot be deleted');
 			END`,
 		},
-		SyncFunc: syncPermissionCatalog,
+		SyncFunc: syncUserDatabase,
 		SeedFunc: seedAdminUser,
 	}
+}
+
+func syncUserDatabase(ctx context.Context, tx *sql.Tx) error {
+	if err := ensureUserColumn(ctx, tx, "groups", "organization_level", "INTEGER"); err != nil {
+		return err
+	}
+	if err := ensureUserColumn(ctx, tx, "user_groups", "is_primary_organization", "INTEGER NOT NULL DEFAULT 0"); err != nil {
+		return err
+	}
+	// Legacy hierarchical groups become organizations. Standalone legacy groups
+	// become projects so existing installations remain usable after migration.
+	if _, err := tx.ExecContext(ctx, `UPDATE groups SET type='organization'
+		WHERE type NOT IN ('organization','project') AND
+		(parent_group_id IS NOT NULL OR id IN (SELECT parent_group_id FROM groups WHERE parent_group_id IS NOT NULL))`); err != nil {
+		return err
+	}
+	if _, err := tx.ExecContext(ctx, `UPDATE groups SET type='project'
+		WHERE type NOT IN ('organization','project')`); err != nil {
+		return err
+	}
+	for level := 1; level <= 5; level++ {
+		if level == 1 {
+			if _, err := tx.ExecContext(ctx, `UPDATE groups SET organization_level=1
+				WHERE type='organization' AND parent_group_id IS NULL`); err != nil {
+				return err
+			}
+			continue
+		}
+		if _, err := tx.ExecContext(ctx, `UPDATE groups SET organization_level=?
+			WHERE type='organization' AND parent_group_id IN
+			(SELECT id FROM groups WHERE type='organization' AND organization_level=?)`, level, level-1); err != nil {
+			return err
+		}
+	}
+	var invalidLegacyHierarchy int
+	if err := tx.QueryRowContext(ctx, `SELECT COUNT(*) FROM groups
+		WHERE type='organization' AND organization_level IS NULL`).Scan(&invalidLegacyHierarchy); err != nil {
+		return err
+	}
+	if invalidLegacyHierarchy > 0 {
+		return errors.New("legacy organization hierarchy exceeds five levels or has an invalid parent")
+	}
+	if _, err := tx.ExecContext(ctx, `UPDATE groups SET parent_group_id=NULL,organization_level=NULL WHERE type='project'`); err != nil {
+		return err
+	}
+	if _, err := tx.ExecContext(ctx, `CREATE UNIQUE INDEX IF NOT EXISTS user_one_primary_organization
+		ON user_groups(user_id) WHERE is_primary_organization=1 AND left_at IS NULL`); err != nil {
+		return err
+	}
+	return syncPermissionCatalog(ctx, tx)
+}
+
+func ensureUserColumn(ctx context.Context, tx *sql.Tx, table, column, definition string) error {
+	rows, err := tx.QueryContext(ctx, `PRAGMA table_info(`+table+`)`)
+	if err != nil {
+		return err
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var cid int
+		var name, columnType string
+		var notNull, primaryKey int
+		var defaultValue any
+		if err := rows.Scan(&cid, &name, &columnType, &notNull, &defaultValue, &primaryKey); err != nil {
+			return err
+		}
+		if name == column {
+			return nil
+		}
+	}
+	if err := rows.Err(); err != nil {
+		return err
+	}
+	if err := rows.Close(); err != nil {
+		return err
+	}
+	_, err = tx.ExecContext(ctx, `ALTER TABLE `+table+` ADD COLUMN `+column+` `+definition)
+	return err
 }
 
 func seedAdminUser(ctx context.Context, tx *sql.Tx) error {

@@ -116,6 +116,71 @@
   }
 
   .role-form {
-    padding: 18px;
+    padding: 16px;
+  }
+
+  .role-form .nex-button,
+  .role-detail__actions .nex-button {
+    width: 100%;
+  }
+
+  .role-table-wrap {
+    overflow: visible;
+    border: 0;
+    border-radius: 0;
+    background: var(--color-background);
+  }
+
+  .role-table {
+    min-width: 0;
+  }
+
+  .role-table thead {
+    display: none;
+  }
+
+  .role-table,
+  .role-table tbody,
+  .role-table tr,
+  .role-table td {
+    display: block;
+    width: 100%;
+  }
+
+  .role-table tbody {
+    display: grid;
+    gap: 12px;
+  }
+
+  .role-table tr {
+    overflow: hidden;
+    border: 1px solid var(--color-border);
+    border-radius: 10px;
+    background: var(--color-surface);
+  }
+
+  .role-table td {
+    display: grid;
+    grid-template-columns: minmax(96px, 36%) minmax(0, 1fr);
+    gap: 12px;
+    padding: 12px 14px;
+    overflow-wrap: anywhere;
+    text-align: left;
+  }
+
+  .role-table td::before {
+    content: attr(data-label);
+    color: var(--color-muted);
+    font-size: 12px;
+    font-weight: 600;
+    line-height: 18px;
+  }
+
+  .role-table__actions {
+    justify-content: flex-start;
+  }
+
+  .role-table__actions .nex-button {
+    width: auto;
   }
 }

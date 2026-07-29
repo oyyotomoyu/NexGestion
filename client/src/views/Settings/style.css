@@ -41,7 +41,42 @@
 }
 
 @media (max-width: 800px) {
+  .settings {
+    gap: 20px;
+  }
+
   .settings__layout {
     grid-template-columns: 1fr;
+    gap: 20px;
+  }
+
+  .settings__nav {
+    display: flex;
+    gap: 6px;
+    max-width: 100%;
+    padding: 8px;
+    overflow-x: auto;
+    overscroll-behavior-inline: contain;
+    scrollbar-width: thin;
+  }
+
+  .settings__nav > .nex-text {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    border: 0;
+  }
+
+  .settings__nav a {
+    min-height: 44px;
+    display: flex;
+    flex: 0 0 auto;
+    align-items: center;
+    padding: 10px 12px;
   }
 }

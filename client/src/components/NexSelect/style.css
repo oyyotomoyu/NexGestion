@@ -29,6 +29,11 @@
   border-color: var(--color-primary);
 }
 
+.nex-select__trigger:disabled {
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+
 .nex-select__trigger:focus-visible {
   outline: none;
   box-shadow: 0 0 0 4px var(--color-focus-ring);

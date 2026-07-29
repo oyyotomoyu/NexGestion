@@ -18,6 +18,7 @@
     "border": "#e5e7eb",
     "focusRing": "#175cd333",
     "shadow": "#1018281a",
+    "overlay": "#10182880",
     "success": "#067647",
     "warning": "#b54708",
     "danger": "#b42318",

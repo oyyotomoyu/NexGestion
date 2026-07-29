@@ -47,6 +47,7 @@ export function NexSelect<Value extends string>({
         aria-label={ariaLabel}
         aria-expanded={isOpen}
         aria-haspopup="listbox"
+        disabled={options.length === 0}
         onClick={() => setIsOpen((open) => !open)}
         onKeyDown={(event) => {
           if (event.key === "Escape") setIsOpen(false);
@@ -54,7 +55,7 @@ export function NexSelect<Value extends string>({
         }}
       >
         <NexText as="span" variant="label" color="inherit">
-          {selectedOption.label}
+          {selectedOption?.label ?? ""}
         </NexText>
         <span className="nex-select__chevron" aria-hidden="true" />
       </button>

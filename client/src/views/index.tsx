@@ -2,6 +2,8 @@ import { Navigate, RouteObject, useRoutes } from "react-router-dom";
 
 import { ProtectedRoute } from "@/auth/ProtectedRoute";
 import AppLayout from "@/layouts/AppLayout";
+import Attendance from "@/views/Attendance";
+import AttendanceApprovals from "@/views/AttendanceApprovals";
 import Dashboard from "@/views/Dashboard";
 import Login from "@/views/Login";
 import Settings from "@/views/Settings";
@@ -32,6 +34,14 @@ const routes: RouteObject[] = [
       {
         path: "dashboard",
         element: <Dashboard />,
+      },
+      {
+        path: "attendance",
+        element: <Attendance />,
+      },
+      {
+        path: "attendance/approvals",
+        element: <AttendanceApprovals />,
       },
       {
         path: "settings",

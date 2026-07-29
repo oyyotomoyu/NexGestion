@@ -60,6 +60,11 @@ Current mappings:
 | Create/update/delete groups | `groups.manage` |
 | Add/update/remove group members | `groups.assign` |
 | Read request and audit logs | `logs.read` |
+| Read the current user's attendance | `attendance.read.self` |
+| Sign the current user in and out | `attendance.clock.self` |
+| Read other users' attendance | `attendance.read` |
+| Correct attendance and generate reports | `attendance.manage` |
+| Read and download organization attendance reports | `attendance.reports.read` |
 
 `server/apis/access_control.go` owns the allow/deny function and permission middleware. The system package supplies role and permission data but does not authorize ordinary API requests. System services retain only domain invariants, such as protecting the Admin role. Route middleware is the mandatory authorization boundary.
 

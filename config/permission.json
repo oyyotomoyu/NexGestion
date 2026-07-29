@@ -54,6 +54,31 @@
       "key": "logs.read",
       "module": "logs",
       "description": "View audit and request logs"
+    },
+    {
+      "key": "attendance.read.self",
+      "module": "attendance",
+      "description": "View the current user's attendance"
+    },
+    {
+      "key": "attendance.clock.self",
+      "module": "attendance",
+      "description": "Sign the current user in and out"
+    },
+    {
+      "key": "attendance.read",
+      "module": "attendance",
+      "description": "View attendance for other users"
+    },
+    {
+      "key": "attendance.manage",
+      "module": "attendance",
+      "description": "Manage attendance and generate reports"
+    },
+    {
+      "key": "attendance.reports.read",
+      "module": "attendance",
+      "description": "View and download organization attendance reports"
     }
   ]
 }

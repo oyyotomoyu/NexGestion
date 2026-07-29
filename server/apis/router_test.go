@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 	"time"
 
@@ -22,12 +23,13 @@ func testRouter(t *testing.T) *http.ServeMux {
 	}
 	router := http.NewServeMux()
 	users := system.NewUserService(directory)
+	attendance := system.NewAttendanceService(directory, t.TempDir(), users)
 	logService, err := applogs.NewService(t.TempDir(), time.UTC)
 	if err != nil {
 		t.Fatal(err)
 	}
 	t.Cleanup(logService.Close)
-	InitRouter(router, users, system.NewAuthService(users), logService)
+	InitRouter(router, users, attendance, system.NewAuthService(users), logService)
 	return router
 }
 
@@ -258,7 +260,7 @@ func TestGroupCRUDAPI(t *testing.T) {
 	router := testRouter(t)
 	accessToken, _ := loginForTest(t, router)
 
-	parentResponse := serveAuthorized(router, http.MethodPost, "/api/groups", []byte(`{"name":"Head Office","type":"branch"}`), accessToken)
+	parentResponse := serveAuthorized(router, http.MethodPost, "/api/groups", []byte(`{"name":"Head Office","type":"organization","organization_level":1}`), accessToken)
 	if parentResponse.Code != http.StatusCreated {
 		t.Fatalf("create parent group: expected %d, got %d: %s", http.StatusCreated, parentResponse.Code, parentResponse.Body.String())
 	}
@@ -267,7 +269,7 @@ func TestGroupCRUDAPI(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	childResponse := serveAuthorized(router, http.MethodPost, "/api/groups", []byte(`{"name":"Finance","type":"department","parent_group_id":"`+parent.ID+`"}`), accessToken)
+	childResponse := serveAuthorized(router, http.MethodPost, "/api/groups", []byte(`{"name":"Finance","type":"organization","organization_level":2,"parent_group_id":"`+parent.ID+`"}`), accessToken)
 	if childResponse.Code != http.StatusCreated {
 		t.Fatalf("create child group: expected %d, got %d: %s", http.StatusCreated, childResponse.Code, childResponse.Body.String())
 	}
@@ -332,6 +334,40 @@ func TestGroupAPIRequiresAuthentication(t *testing.T) {
 	response := serve(testRouter(t), http.MethodGet, "/api/groups", nil)
 	if response.Code != http.StatusUnauthorized {
 		t.Fatalf("expected %d, got %d", http.StatusUnauthorized, response.Code)
+	}
+}
+
+func TestGroupOrganizationLevelsAndProjectHierarchyValidation(t *testing.T) {
+	router := testRouter(t)
+	token, _ := loginForTest(t, router)
+
+	rootResponse := serveAuthorized(router, http.MethodPost, "/api/groups",
+		[]byte(`{"name":"Company","type":"organization","organization_level":1}`), token)
+	if rootResponse.Code != http.StatusCreated {
+		t.Fatalf("create level 1: %d %s", rootResponse.Code, rootResponse.Body.String())
+	}
+	var root system.Group
+	if err := json.NewDecoder(rootResponse.Body).Decode(&root); err != nil {
+		t.Fatal(err)
+	}
+	if root.OrganizationLevel == nil || *root.OrganizationLevel != 1 {
+		t.Fatalf("level 1 response: %+v", root)
+	}
+
+	skipped := serveAuthorized(router, http.MethodPost, "/api/groups",
+		[]byte(`{"name":"Skipped Team","type":"organization","organization_level":3,"parent_group_id":"`+root.ID+`"}`), token)
+	if skipped.Code != http.StatusBadRequest {
+		t.Fatalf("skipped level: expected 400, got %d: %s", skipped.Code, skipped.Body.String())
+	}
+	projectParent := serveAuthorized(router, http.MethodPost, "/api/groups",
+		[]byte(`{"name":"Project Alpha","type":"project","parent_group_id":"`+root.ID+`"}`), token)
+	if projectParent.Code != http.StatusBadRequest {
+		t.Fatalf("project parent: expected 400, got %d: %s", projectParent.Code, projectParent.Body.String())
+	}
+	levelSix := serveAuthorized(router, http.MethodPost, "/api/groups",
+		[]byte(`{"name":"Too Deep","type":"organization","organization_level":6}`), token)
+	if levelSix.Code != http.StatusBadRequest {
+		t.Fatalf("level 6: expected 400, got %d: %s", levelSix.Code, levelSix.Body.String())
 	}
 }
 
@@ -506,7 +542,7 @@ func TestGroupCreatesRolesAndManagerCanManageOwnMembers(t *testing.T) {
 	manager := createUser("Group Manager", "manager@example.com")
 	member := createUser("Group Member", "member@example.com")
 
-	groupResponse := serveAuthorized(router, http.MethodPost, "/api/groups", []byte(`{"name":"North Branch","type":"branch"}`), adminToken)
+	groupResponse := serveAuthorized(router, http.MethodPost, "/api/groups", []byte(`{"name":"North Branch","type":"project"}`), adminToken)
 	var group system.Group
 	if err := json.NewDecoder(groupResponse.Body).Decode(&group); err != nil {
 		t.Fatal(err)
@@ -514,7 +550,7 @@ func TestGroupCreatesRolesAndManagerCanManageOwnMembers(t *testing.T) {
 	if group.ManagerRoleID == "" || group.MemberRoleID == "" {
 		t.Fatalf("expected generated group roles: %+v", group)
 	}
-	otherResponse := serveAuthorized(router, http.MethodPost, "/api/groups", []byte(`{"name":"South Branch","type":"branch"}`), adminToken)
+	otherResponse := serveAuthorized(router, http.MethodPost, "/api/groups", []byte(`{"name":"South Branch","type":"project"}`), adminToken)
 	var other system.Group
 	if err := json.NewDecoder(otherResponse.Body).Decode(&other); err != nil {
 		t.Fatal(err)
@@ -627,6 +663,86 @@ func TestReadLogsAPI(t *testing.T) {
 	}
 	if result.Logs[0].UserID == "" || result.Logs[0].Content != "login succeeded" {
 		t.Fatalf("unexpected log: %+v", result.Logs[0])
+	}
+}
+
+func TestAttendanceAPIUsesRolePermissionsAndAllowsRepeatedSessions(t *testing.T) {
+	router := testRouter(t)
+	adminToken, _ := loginForTest(t, router)
+	userResponse := serveAuthorized(router, http.MethodPost, "/api/users", []byte(`{
+		"display_name":"Attendance Operator",
+		"email":"attendance-operator@example.com",
+		"password":"a-secure-user-password",
+		"timezone":"Asia/Taipei"
+	}`), adminToken)
+	var user system.User
+	if err := json.NewDecoder(userResponse.Body).Decode(&user); err != nil {
+		t.Fatal(err)
+	}
+	loginResponse := serve(router, http.MethodPost, "/api/auth/login", []byte(`{
+		"email":"attendance-operator@example.com",
+		"password":"a-secure-user-password"
+	}`))
+	var login struct {
+		AccessToken string `json:"access_token"`
+	}
+	if err := json.NewDecoder(loginResponse.Body).Decode(&login); err != nil {
+		t.Fatal(err)
+	}
+	if response := serveAuthorized(router, http.MethodGet, "/api/attendance/today", nil, login.AccessToken); response.Code != http.StatusForbidden {
+		t.Fatalf("attendance without role permission: expected %d, got %d", http.StatusForbidden, response.Code)
+	}
+	roleResponse := serveAuthorized(router, http.MethodPost, "/api/roles", []byte(`{"title":"Attendance User"}`), adminToken)
+	var role system.Role
+	if err := json.NewDecoder(roleResponse.Body).Decode(&role); err != nil {
+		t.Fatal(err)
+	}
+	for _, permission := range []string{"attendance.read.self", "attendance.clock.self"} {
+		response := serveAuthorized(router, http.MethodPut, "/api/roles/"+role.ID+"/permissions/"+permission, nil, adminToken)
+		if response.Code != http.StatusNoContent {
+			t.Fatalf("grant %s: %d %s", permission, response.Code, response.Body.String())
+		}
+	}
+	if response := serveAuthorized(router, http.MethodPut, "/api/roles/"+role.ID+"/users/"+user.ID, nil, adminToken); response.Code != http.StatusNoContent {
+		t.Fatalf("assign attendance role: %d %s", response.Code, response.Body.String())
+	}
+	for _, path := range []string{
+		"/api/attendance/today/sign-in",
+		"/api/attendance/today/sign-out",
+		"/api/attendance/today/sign-in",
+		"/api/attendance/today/sign-out",
+	} {
+		response := serveAuthorized(router, http.MethodPost, path, []byte(`{}`), login.AccessToken)
+		if response.Code != http.StatusOK {
+			t.Fatalf("%s: %d %s", path, response.Code, response.Body.String())
+		}
+	}
+	today := serveAuthorized(router, http.MethodGet, "/api/attendance/today", nil, login.AccessToken)
+	var day system.AttendanceDay
+	if err := json.NewDecoder(today.Body).Decode(&day); err != nil {
+		t.Fatal(err)
+	}
+	if day.Status != system.AttendanceNonWorking || len(day.Sessions) != 2 {
+		t.Fatalf("attendance day: %+v", day)
+	}
+}
+
+func TestAttendanceCSVAPI(t *testing.T) {
+	router := testRouter(t)
+	adminToken, _ := loginForTest(t, router)
+	generated := serveAuthorized(router, http.MethodPost, "/api/attendance/reports/2020-01/generate", []byte(`{}`), adminToken)
+	if generated.Code != http.StatusOK {
+		t.Fatalf("generate CSV: %d %s", generated.Code, generated.Body.String())
+	}
+	download := serveAuthorized(router, http.MethodGet, "/api/attendance/reports/2020-01/csv", nil, adminToken)
+	if download.Code != http.StatusOK {
+		t.Fatalf("download CSV: %d %s", download.Code, download.Body.String())
+	}
+	if contentType := download.Header().Get("Content-Type"); !strings.HasPrefix(contentType, "text/csv") {
+		t.Fatalf("CSV content type: %q", contentType)
+	}
+	if !bytes.HasPrefix(download.Body.Bytes(), []byte{0xEF, 0xBB, 0xBF}) {
+		t.Fatal("downloaded CSV does not have UTF-8 BOM")
 	}
 }
 
