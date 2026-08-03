@@ -100,6 +100,11 @@ export default function AppLayout() {
                 {t("global.k_Nav_Dashboard")}
               </NexText>
             </NavLink>
+            <NavLink to="/notifications" onClick={() => setMenuOpen(false)}>
+              <NexText as="span" variant="label" color="inherit">
+                {t("global.k_Nav_Notifications")}
+              </NexText>
+            </NavLink>
             <NavLink end to="/attendance" onClick={() => setMenuOpen(false)}>
               <NexText as="span" variant="label" color="inherit">
                 {t("global.k_Nav_Attendance")}
