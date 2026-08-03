@@ -24,12 +24,13 @@ func testRouter(t *testing.T) *http.ServeMux {
 	router := http.NewServeMux()
 	users := system.NewUserService(directory)
 	attendance := system.NewAttendanceService(directory, t.TempDir(), users)
+	notifications := system.NewNotificationService(directory, users)
 	logService, err := applogs.NewService(t.TempDir(), time.UTC)
 	if err != nil {
 		t.Fatal(err)
 	}
 	t.Cleanup(logService.Close)
-	InitRouter(router, users, attendance, system.NewAuthService(users), logService)
+	InitRouter(router, users, attendance, notifications, system.NewAuthService(users), logService)
 	return router
 }
 
@@ -743,6 +744,112 @@ func TestAttendanceCSVAPI(t *testing.T) {
 	}
 	if !bytes.HasPrefix(download.Body.Bytes(), []byte{0xEF, 0xBB, 0xBF}) {
 		t.Fatal("downloaded CSV does not have UTF-8 BOM")
+	}
+}
+
+func TestNotificationAPI(t *testing.T) {
+	router := testRouter(t)
+	adminToken, _ := loginForTest(t, router)
+
+	typesResponse := serveAuthorized(router, http.MethodGet, "/api/notifications/types", nil, adminToken)
+	if typesResponse.Code != http.StatusOK {
+		t.Fatalf("list notification types: %d %s", typesResponse.Code, typesResponse.Body.String())
+	}
+	var typesBody struct {
+		Types []system.NotificationType `json:"notification_types"`
+	}
+	if err := json.NewDecoder(typesResponse.Body).Decode(&typesBody); err != nil {
+		t.Fatal(err)
+	}
+	if len(typesBody.Types) < 5 {
+		t.Fatalf("expected default notification types, got %+v", typesBody.Types)
+	}
+
+	createResponse := serveAuthorized(router, http.MethodPost, "/api/notifications", []byte(`{
+		"title":"Maintenance",
+		"message":"System maintenance tonight.",
+		"type":"important",
+		"show_time":"day",
+		"audiences":[{"scope":"organization"}]
+	}`), adminToken)
+	if createResponse.Code != http.StatusCreated {
+		t.Fatalf("create notification: %d %s", createResponse.Code, createResponse.Body.String())
+	}
+	var created system.Notification
+	if err := json.NewDecoder(createResponse.Body).Decode(&created); err != nil {
+		t.Fatal(err)
+	}
+	if created.ID == "" || created.Status != "active" || created.Type.Code != "important" {
+		t.Fatalf("unexpected notification: %+v", created)
+	}
+
+	listResponse := serveAuthorized(router, http.MethodGet, "/api/notifications", nil, adminToken)
+	if listResponse.Code != http.StatusOK {
+		t.Fatalf("list notifications: %d %s", listResponse.Code, listResponse.Body.String())
+	}
+	var listBody struct {
+		Notifications []system.Notification `json:"notifications"`
+	}
+	if err := json.NewDecoder(listResponse.Body).Decode(&listBody); err != nil {
+		t.Fatal(err)
+	}
+	if len(listBody.Notifications) != 1 || listBody.Notifications[0].ID != created.ID {
+		t.Fatalf("expected created notification in inbox, got %+v", listBody.Notifications)
+	}
+
+	updateResponse := serveAuthorized(router, http.MethodPatch, "/api/notifications/"+created.ID, []byte(`{"title":"Updated maintenance"}`), adminToken)
+	if updateResponse.Code != http.StatusOK {
+		t.Fatalf("update notification: %d %s", updateResponse.Code, updateResponse.Body.String())
+	}
+	var updated system.Notification
+	if err := json.NewDecoder(updateResponse.Body).Decode(&updated); err != nil {
+		t.Fatal(err)
+	}
+	if updated.Status != "edited" || updated.Title != "Updated maintenance" {
+		t.Fatalf("unexpected updated notification: %+v", updated)
+	}
+
+	csvResponse := serveAuthorized(router, http.MethodGet, "/api/notifications/exports/"+updated.CreatedAt[:7]+"/csv", nil, adminToken)
+	if csvResponse.Code != http.StatusOK {
+		t.Fatalf("export notifications csv: %d %s", csvResponse.Code, csvResponse.Body.String())
+	}
+	if contentType := csvResponse.Header().Get("Content-Type"); !strings.HasPrefix(contentType, "text/csv") {
+		t.Fatalf("CSV content type: %q", contentType)
+	}
+	if !strings.Contains(csvResponse.Body.String(), "Updated maintenance") {
+		t.Fatalf("CSV missing updated notification: %s", csvResponse.Body.String())
+	}
+
+	hideResponse := serveAuthorized(router, http.MethodPost, "/api/notifications/"+created.ID+"/hide", nil, adminToken)
+	if hideResponse.Code != http.StatusNoContent {
+		t.Fatalf("hide notification: %d %s", hideResponse.Code, hideResponse.Body.String())
+	}
+	hiddenList := serveAuthorized(router, http.MethodGet, "/api/notifications", nil, adminToken)
+	if hiddenList.Code != http.StatusOK {
+		t.Fatalf("list hidden notifications: %d %s", hiddenList.Code, hiddenList.Body.String())
+	}
+	var hiddenBody struct {
+		Notifications []system.Notification `json:"notifications"`
+	}
+	if err := json.NewDecoder(hiddenList.Body).Decode(&hiddenBody); err != nil {
+		t.Fatal(err)
+	}
+	if len(hiddenBody.Notifications) != 0 {
+		t.Fatalf("hidden notification should not appear, got %+v", hiddenBody.Notifications)
+	}
+
+	adminList := serveAuthorized(router, http.MethodGet, "/api/notifications/admin", nil, adminToken)
+	if adminList.Code != http.StatusOK {
+		t.Fatalf("admin list notifications: %d %s", adminList.Code, adminList.Body.String())
+	}
+	var adminBody struct {
+		Notifications []system.Notification `json:"notifications"`
+	}
+	if err := json.NewDecoder(adminList.Body).Decode(&adminBody); err != nil {
+		t.Fatal(err)
+	}
+	if len(adminBody.Notifications) != 1 || adminBody.Notifications[0].Status != "hidden" {
+		t.Fatalf("admin list should include hidden notification, got %+v", adminBody.Notifications)
 	}
 }
 

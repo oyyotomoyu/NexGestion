@@ -12,7 +12,7 @@ import (
 // API handlers belong in this package and may call the system package to
 // perform application operations. The router itself is only responsible for
 // directing requests to the correct handler.
-func InitRouter(router *http.ServeMux, users *system.UserService, attendance *system.AttendanceService, auth *system.AuthService, logService *applogs.Service) {
+func InitRouter(router *http.ServeMux, users *system.UserService, attendance *system.AttendanceService, notifications *system.NotificationService, auth *system.AuthService, logService *applogs.Service) {
 	catalog, err := system.LoadPermissionCatalog()
 	if err != nil {
 		panic("load permission catalog: " + err.Error())
@@ -76,6 +76,13 @@ func InitRouter(router *http.ServeMux, users *system.UserService, attendance *sy
 	router.HandleFunc("POST /api/attendance/reports/{month}/generate", protected("attendance.manage", generateAttendanceMonthlyReport(attendance)))
 	router.HandleFunc("GET /api/attendance/reports/{month}/csv", protected("attendance.reports.read", downloadAttendanceCSV(attendance)))
 	router.HandleFunc("PATCH /api/attendance/days/{id}", protected("attendance.manage", correctAttendanceDay(attendance)))
+	router.HandleFunc("GET /api/notifications/types", protected("notifications.read", listNotificationTypes(notifications)))
+	router.HandleFunc("GET /api/notifications", protected("notifications.read", listMyNotifications(notifications)))
+	router.HandleFunc("GET /api/notifications/admin", protected("notifications.manage", listAdminNotifications(notifications)))
+	router.HandleFunc("POST /api/notifications", authenticated(createNotification(notifications)))
+	router.HandleFunc("PATCH /api/notifications/{id}", authenticated(updateNotification(notifications)))
+	router.HandleFunc("POST /api/notifications/{id}/hide", authenticated(hideNotification(notifications)))
+	router.HandleFunc("GET /api/notifications/exports/{month}/csv", protected("notifications.export", exportNotificationsCSV(notifications)))
 
 	// Keep unknown API paths inside the API layer instead of falling through to
 	// the SPA handler.

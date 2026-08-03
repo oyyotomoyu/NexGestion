@@ -45,8 +45,10 @@ func main() {
 	mux := http.NewServeMux()
 	users := system.NewUserService(databaseDirectory)
 	attendance := system.NewAttendanceService(databaseDirectory, getAttendanceReportDirectory(), users)
-	apis.InitRouter(mux, users, attendance, system.NewAuthService(users), logService)
+	notifications := system.NewNotificationService(databaseDirectory, users)
+	apis.InitRouter(mux, users, attendance, notifications, system.NewAuthService(users), logService)
 	go runAttendanceMaintenance(attendance, logService)
+	go runNotificationMaintenance(notifications, logService)
 	mux.Handle("/", spaHandler(distDir))
 
 	server := &http.Server{
@@ -60,6 +62,20 @@ func main() {
 
 	if err := server.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
 		log.Fatalf("server failed: %v", err)
+	}
+}
+
+func runNotificationMaintenance(notifications *system.NotificationService, logService *applogs.Service) {
+	run := func() {
+		if err := notifications.ExpireAndCleanup(context.Background()); err != nil {
+			_ = logService.Log("error", "notification maintenance failed: "+err.Error())
+		}
+	}
+	run()
+	ticker := time.NewTicker(time.Hour)
+	defer ticker.Stop()
+	for range ticker.C {
+		run()
 	}
 }
 

@@ -1,5 +1,7 @@
 # Role System
 
+User-facing role management documentation belongs in [`../UserApp/access-control.md`](../UserApp/access-control.md).
+
 ## 1. Purpose
 
 The Role System defines named collections of permissions. Roles answer **what a user may do** and are organization-wide; organization membership belongs to the Group System.

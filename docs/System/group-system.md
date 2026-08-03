@@ -1,5 +1,7 @@
 # Group System
 
+User-facing group management documentation belongs in [`../UserApp/access-control.md`](../UserApp/access-control.md).
+
 ## 1. Purpose
 
 The Group System represents where users belong within the single organization managed by a NexGestion installation. A group may represent a department, branch, store, project team, or working group.

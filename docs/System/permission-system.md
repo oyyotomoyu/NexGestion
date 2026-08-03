@@ -1,5 +1,7 @@
 # Permission System
 
+User-facing permission and access-control documentation belongs in [`../UserApp/access-control.md`](../UserApp/access-control.md).
+
 ## 1. Authorization Model
 
 NexGestion uses role-based access control. A user may have any number of roles, and each role may grant any number of permissions.

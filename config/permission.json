@@ -79,6 +79,61 @@
       "key": "attendance.reports.read",
       "module": "attendance",
       "description": "View and download organization attendance reports"
+    },
+    {
+      "key": "notifications.read",
+      "module": "notifications",
+      "description": "View notifications addressed to the current user"
+    },
+    {
+      "key": "notifications.send.own_group",
+      "module": "notifications",
+      "description": "Send notifications to users in the sender's own groups"
+    },
+    {
+      "key": "notifications.send.group",
+      "module": "notifications",
+      "description": "Send notifications to selected groups, including groups the sender does not belong to"
+    },
+    {
+      "key": "notifications.send.organization",
+      "module": "notifications",
+      "description": "Send notifications to the whole organization"
+    },
+    {
+      "key": "notifications.manage",
+      "module": "notifications",
+      "description": "Manage notification settings, types, retention, expiry, and exports"
+    },
+    {
+      "key": "notifications.export",
+      "module": "notifications",
+      "description": "Export notification records by CSV or administrator API"
+    },
+    {
+      "key": "notifications.type.info",
+      "module": "notifications",
+      "description": "Send Info notifications"
+    },
+    {
+      "key": "notifications.type.success",
+      "module": "notifications",
+      "description": "Send Success notifications"
+    },
+    {
+      "key": "notifications.type.warning",
+      "module": "notifications",
+      "description": "Send Warning notifications"
+    },
+    {
+      "key": "notifications.type.important",
+      "module": "notifications",
+      "description": "Send Important notifications"
+    },
+    {
+      "key": "notifications.type.urgent",
+      "module": "notifications",
+      "description": "Send Urgent notifications"
     }
   ]
 }

@@ -40,6 +40,7 @@ var RequiredDatabases = []DatabaseSpec{
 	},
 	userDatabaseSpec(),
 	attendanceDatabaseSpec(),
+	notificationDatabaseSpec(),
 }
 
 // EnsureRequiredDatabases creates and initializes every required database.

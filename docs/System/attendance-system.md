@@ -1,5 +1,7 @@
 # Attendance System
 
+User-facing attendance workflow documentation belongs in [`../UserApp/attendance.md`](../UserApp/attendance.md).
+
 ## 1. Purpose
 
 The Attendance System records whether each user is working or non-working, every daily work session, and the user's total working hours.
