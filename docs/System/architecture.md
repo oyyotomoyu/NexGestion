@@ -152,6 +152,8 @@ Initial database ownership decision:
 - `system.db`: Core application settings and system metadata
 - `user.db`: All UserSystem data, including users, employee profiles, roles, permissions, and groups
 - `attendance.db`: Attendance days, work sessions, event history, monthly aggregates, and CSV export metadata
+- `notification.db`: Notification types, messages, audiences, delivery state, export metadata, and lifecycle events
+- `report/`: Generated CSV report files for admin review, download, backup, and deletion
 - Business modules must reference UserSystem records by immutable identifiers instead of duplicating user data
 
 The UserSystem model is documented in [`user-system.md`](./user-system.md), with focused contracts in [`permission-system.md`](./permission-system.md), [`role-system.md`](./role-system.md), and [`group-system.md`](./group-system.md).

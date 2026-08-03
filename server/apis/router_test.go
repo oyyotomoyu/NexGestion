@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -23,14 +24,16 @@ func testRouter(t *testing.T) *http.ServeMux {
 	}
 	router := http.NewServeMux()
 	users := system.NewUserService(directory)
-	attendance := system.NewAttendanceService(directory, t.TempDir(), users)
+	reportDirectory := t.TempDir()
+	attendance := system.NewAttendanceService(directory, filepath.Join(reportDirectory, "attendance"), users)
 	notifications := system.NewNotificationService(directory, users)
+	reports := system.NewReportFileService(reportDirectory)
 	logService, err := applogs.NewService(t.TempDir(), time.UTC)
 	if err != nil {
 		t.Fatal(err)
 	}
 	t.Cleanup(logService.Close)
-	InitRouter(router, users, attendance, notifications, system.NewAuthService(users), logService)
+	InitRouter(router, users, attendance, notifications, reports, system.NewAuthService(users), logService)
 	return router
 }
 
@@ -735,6 +738,10 @@ func TestAttendanceCSVAPI(t *testing.T) {
 	if generated.Code != http.StatusOK {
 		t.Fatalf("generate CSV: %d %s", generated.Code, generated.Body.String())
 	}
+	var export system.AttendanceExport
+	if err := json.NewDecoder(generated.Body).Decode(&export); err != nil {
+		t.Fatal(err)
+	}
 	download := serveAuthorized(router, http.MethodGet, "/api/attendance/reports/2020-01/csv", nil, adminToken)
 	if download.Code != http.StatusOK {
 		t.Fatalf("download CSV: %d %s", download.Code, download.Body.String())
@@ -744,6 +751,38 @@ func TestAttendanceCSVAPI(t *testing.T) {
 	}
 	if !bytes.HasPrefix(download.Body.Bytes(), []byte{0xEF, 0xBB, 0xBF}) {
 		t.Fatal("downloaded CSV does not have UTF-8 BOM")
+	}
+
+	files := serveAuthorized(router, http.MethodGet, "/api/reports/files", nil, adminToken)
+	if files.Code != http.StatusOK {
+		t.Fatalf("list report files: %d %s", files.Code, files.Body.String())
+	}
+	var fileBody struct {
+		Files []system.ReportFile `json:"files"`
+	}
+	if err := json.NewDecoder(files.Body).Decode(&fileBody); err != nil {
+		t.Fatal(err)
+	}
+	reportPath := filepath.ToSlash(filepath.Join("attendance", export.RelativePath))
+	if len(fileBody.Files) != 1 || fileBody.Files[0].Path != reportPath {
+		t.Fatalf("unexpected report files: %+v, export: %+v", fileBody.Files, export)
+	}
+
+	reportDownload := serveAuthorized(router, http.MethodGet, "/api/reports/files/"+reportPath, nil, adminToken)
+	if reportDownload.Code != http.StatusOK {
+		t.Fatalf("download report file: %d %s", reportDownload.Code, reportDownload.Body.String())
+	}
+	if !bytes.Equal(reportDownload.Body.Bytes(), download.Body.Bytes()) {
+		t.Fatal("report file download did not match attendance CSV")
+	}
+
+	deleted := serveAuthorized(router, http.MethodDelete, "/api/reports/files/"+reportPath, nil, adminToken)
+	if deleted.Code != http.StatusNoContent {
+		t.Fatalf("delete report file: %d %s", deleted.Code, deleted.Body.String())
+	}
+	missing := serveAuthorized(router, http.MethodGet, "/api/reports/files/"+reportPath, nil, adminToken)
+	if missing.Code != http.StatusNotFound {
+		t.Fatalf("deleted report file should be missing, got %d", missing.Code)
 	}
 }
 

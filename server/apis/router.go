@@ -12,7 +12,7 @@ import (
 // API handlers belong in this package and may call the system package to
 // perform application operations. The router itself is only responsible for
 // directing requests to the correct handler.
-func InitRouter(router *http.ServeMux, users *system.UserService, attendance *system.AttendanceService, notifications *system.NotificationService, auth *system.AuthService, logService *applogs.Service) {
+func InitRouter(router *http.ServeMux, users *system.UserService, attendance *system.AttendanceService, notifications *system.NotificationService, reports *system.ReportFileService, auth *system.AuthService, logService *applogs.Service) {
 	catalog, err := system.LoadPermissionCatalog()
 	if err != nil {
 		panic("load permission catalog: " + err.Error())
@@ -83,6 +83,9 @@ func InitRouter(router *http.ServeMux, users *system.UserService, attendance *sy
 	router.HandleFunc("PATCH /api/notifications/{id}", authenticated(updateNotification(notifications)))
 	router.HandleFunc("POST /api/notifications/{id}/hide", authenticated(hideNotification(notifications)))
 	router.HandleFunc("GET /api/notifications/exports/{month}/csv", protected("notifications.export", exportNotificationsCSV(notifications)))
+	router.HandleFunc("GET /api/reports/files", protected("reports.manage", listReportFiles(reports)))
+	router.HandleFunc("GET /api/reports/files/{path...}", protected("reports.manage", downloadReportFile(reports)))
+	router.HandleFunc("DELETE /api/reports/files/{path...}", protected("reports.manage", deleteReportFile(reports)))
 
 	// Keep unknown API paths inside the API layer instead of falling through to
 	// the SPA handler.

@@ -46,7 +46,11 @@ func main() {
 	users := system.NewUserService(databaseDirectory)
 	attendance := system.NewAttendanceService(databaseDirectory, getAttendanceReportDirectory(), users)
 	notifications := system.NewNotificationService(databaseDirectory, users)
-	apis.InitRouter(mux, users, attendance, notifications, system.NewAuthService(users), logService)
+	reports := system.NewReportFileService(getReportDirectory())
+	if err := reports.EnsureRoot(); err != nil {
+		log.Fatalf("report directory initialization failed: %v", err)
+	}
+	apis.InitRouter(mux, users, attendance, notifications, reports, system.NewAuthService(users), logService)
 	go runAttendanceMaintenance(attendance, logService)
 	go runNotificationMaintenance(notifications, logService)
 	mux.Handle("/", spaHandler(distDir))
@@ -82,7 +86,15 @@ func runNotificationMaintenance(notifications *system.NotificationService, logSe
 func getAttendanceReportDirectory() string {
 	directory := strings.TrimSpace(os.Getenv("ATTENDANCE_REPORT_DIR"))
 	if directory == "" {
-		return filepath.Join("reports", "attendance")
+		return filepath.Join("report", "attendance")
+	}
+	return directory
+}
+
+func getReportDirectory() string {
+	directory := strings.TrimSpace(os.Getenv("REPORT_DIR"))
+	if directory == "" {
+		return "report"
 	}
 	return directory
 }

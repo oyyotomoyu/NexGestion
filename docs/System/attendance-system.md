@@ -302,7 +302,7 @@ Each completed month produces one organization-level CSV file containing one row
 Default path:
 
 ```txt
-reports/
+report/
 └── attendance/
     └── 2026/
         └── attendance-2026-07.csv
@@ -494,7 +494,7 @@ On phone layouts:
 - A correction records the administrator, previous values, new values, reason, and time.
 - Attendance APIs never expose password, token, or unrelated employee data.
 - Database backups must include `attendance.db` and preserve monthly reports.
-- Backups must also include the configured `reports/attendance` directory and verify CSV checksums.
+- Backups must also include the configured `report/attendance` directory and verify CSV checksums.
 
 ## 11. Operational Jobs
 

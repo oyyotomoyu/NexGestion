@@ -134,6 +134,11 @@
       "key": "notifications.type.urgent",
       "module": "notifications",
       "description": "Send Urgent notifications"
+    },
+    {
+      "key": "reports.manage",
+      "module": "reports",
+      "description": "View, download, and delete generated report files"
     }
   ]
 }

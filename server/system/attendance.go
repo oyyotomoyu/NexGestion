@@ -100,7 +100,7 @@ func NewAttendanceService(databaseDirectory, reportDirectory string, users *User
 		databaseDirectory = defaultDatabaseDirectory
 	}
 	if strings.TrimSpace(reportDirectory) == "" {
-		reportDirectory = filepath.Join("reports", "attendance")
+		reportDirectory = filepath.Join("report", "attendance")
 	}
 	return &AttendanceService{
 		databasePath: filepath.Join(databaseDirectory, "attendance.db"),
