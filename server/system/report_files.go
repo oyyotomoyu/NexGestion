@@ -37,12 +37,21 @@ func (s *ReportFileService) EnsureRoot() error {
 	return os.MkdirAll(s.root, 0o755)
 }
 
-func (s *ReportFileService) List() ([]ReportFile, error) {
+func (s *ReportFileService) List(query ListQuery) (ListResult[ReportFile], error) {
+	query, _, err := NormalizeListQuery(query, "modified_at", "desc", map[string]string{
+		"path":        "path",
+		"name":        "name",
+		"size":        "size",
+		"modified_at": "modified_at",
+	})
+	if err != nil {
+		return ListResult[ReportFile]{}, err
+	}
 	if err := s.EnsureRoot(); err != nil {
-		return nil, err
+		return ListResult[ReportFile]{}, err
 	}
 	files := []ReportFile{}
-	err := filepath.WalkDir(s.root, func(path string, entry fs.DirEntry, err error) error {
+	err = filepath.WalkDir(s.root, func(path string, entry fs.DirEntry, err error) error {
 		if err != nil {
 			return err
 		}
@@ -66,15 +75,66 @@ func (s *ReportFileService) List() ([]ReportFile, error) {
 		return nil
 	})
 	if err != nil {
-		return nil, err
+		return ListResult[ReportFile]{}, err
 	}
+	files = filterReportFiles(files, query)
 	sort.Slice(files, func(i, j int) bool {
-		if files[i].ModifiedAt == files[j].ModifiedAt {
-			return files[i].Path < files[j].Path
+		less := reportFileLess(files[i], files[j], query.Sort)
+		if query.Order == "desc" {
+			return !less && files[i].Path != files[j].Path
 		}
-		return files[i].ModifiedAt > files[j].ModifiedAt
+		return less
 	})
-	return files, nil
+	total := len(files)
+	start := ListOffset(query)
+	if start >= len(files) {
+		files = []ReportFile{}
+	} else {
+		end := start + query.PageSize
+		if end > len(files) {
+			end = len(files)
+		}
+		files = files[start:end]
+	}
+	return NewListResult(files, query, total), nil
+}
+
+func filterReportFiles(files []ReportFile, query ListQuery) []ReportFile {
+	filtered := make([]ReportFile, 0, len(files))
+	extension := strings.TrimSpace(query.Filters["extension"])
+	folder := strings.Trim(strings.TrimSpace(query.Filters["folder"]), "/")
+	for _, file := range files {
+		if query.Keyword != "" {
+			keyword := strings.ToLower(query.Keyword)
+			if !strings.Contains(strings.ToLower(file.Path), keyword) && !strings.Contains(strings.ToLower(file.Name), keyword) {
+				continue
+			}
+		}
+		if extension != "" && !strings.EqualFold(filepath.Ext(file.Name), extension) {
+			continue
+		}
+		if folder != "" && !strings.HasPrefix(file.Path, folder+"/") && file.Path != folder {
+			continue
+		}
+		filtered = append(filtered, file)
+	}
+	return filtered
+}
+
+func reportFileLess(a, b ReportFile, field string) bool {
+	switch field {
+	case "path":
+		return a.Path < b.Path
+	case "name":
+		if a.Name == b.Name {
+			return a.Path < b.Path
+		}
+		return a.Name < b.Name
+	case "size":
+		return a.Size < b.Size || (a.Size == b.Size && a.Path < b.Path)
+	default:
+		return a.ModifiedAt < b.ModifiedAt || (a.ModifiedAt == b.ModifiedAt && a.Path < b.Path)
+	}
 }
 
 func (s *ReportFileService) Path(relative string) (string, error) {

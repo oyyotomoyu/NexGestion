@@ -507,7 +507,7 @@ func TestRequestPermissionUsesUnionOfUserRoles(t *testing.T) {
 func TestPermissionCatalogIsConfigManaged(t *testing.T) {
 	router := testRouter(t)
 	token, _ := loginForTest(t, router)
-	listed := serveAuthorized(router, http.MethodGet, "/api/permissions", nil, token)
+	listed := serveAuthorized(router, http.MethodGet, "/api/permissions?page_size=100", nil, token)
 	if listed.Code != http.StatusOK {
 		t.Fatalf("list permissions: %d", listed.Code)
 	}

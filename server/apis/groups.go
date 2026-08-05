@@ -8,12 +8,20 @@ import (
 
 func listGroups(users *system.UserService) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		groups, err := users.ListGroups(r.Context())
+		query, err := parseListQuery(r)
 		if err != nil {
+			writeListQueryError(w, err)
+			return
+		}
+		groups, err := users.ListGroups(r.Context(), query)
+		if err != nil {
+			if writeListQueryError(w, err) {
+				return
+			}
 			writeSystemError(w, err)
 			return
 		}
-		writeJSON(w, http.StatusOK, map[string]any{"groups": groups})
+		writeJSON(w, http.StatusOK, listResponse("groups", groups))
 	}
 }
 
@@ -77,12 +85,20 @@ func deleteGroup(users *system.UserService) http.HandlerFunc {
 
 func listGroupMembers(users *system.UserService) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		members, err := users.ListGroupMembers(r.Context(), authenticatedUserID(r), r.PathValue("id"))
+		query, err := parseListQuery(r)
 		if err != nil {
+			writeListQueryError(w, err)
+			return
+		}
+		members, err := users.ListGroupMembers(r.Context(), authenticatedUserID(r), r.PathValue("id"), query)
+		if err != nil {
+			if writeListQueryError(w, err) {
+				return
+			}
 			writeSystemError(w, err)
 			return
 		}
-		writeJSON(w, http.StatusOK, map[string]any{"members": members})
+		writeJSON(w, http.StatusOK, listResponse("members", members))
 	}
 }
 

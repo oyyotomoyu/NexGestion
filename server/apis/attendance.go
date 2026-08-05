@@ -52,12 +52,20 @@ func attendanceDays(attendance *system.AttendanceService, self bool) http.Handle
 		if self {
 			userID = authenticatedUserID(r)
 		}
-		days, err := attendance.ListDays(r.Context(), userID, strings.TrimSpace(r.URL.Query().Get("month")))
+		query, err := parseListQuery(r)
 		if err != nil {
+			writeListQueryError(w, err)
+			return
+		}
+		days, err := attendance.ListDays(r.Context(), userID, strings.TrimSpace(r.URL.Query().Get("month")), query)
+		if err != nil {
+			if writeListQueryError(w, err) {
+				return
+			}
 			writeAttendanceError(w, err)
 			return
 		}
-		writeJSON(w, http.StatusOK, map[string]any{"days": days})
+		writeJSON(w, http.StatusOK, listResponse("days", days))
 	}
 }
 
@@ -74,12 +82,20 @@ func attendanceLeaveTypes() http.HandlerFunc {
 
 func attendanceLeaveRequests(attendance *system.AttendanceService) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		requests, err := attendance.ListLeaveRequests(r.Context(), authenticatedUserID(r))
+		query, err := parseListQuery(r)
 		if err != nil {
+			writeListQueryError(w, err)
+			return
+		}
+		requests, err := attendance.ListLeaveRequests(r.Context(), authenticatedUserID(r), query)
+		if err != nil {
+			if writeListQueryError(w, err) {
+				return
+			}
 			writeAttendanceError(w, err)
 			return
 		}
-		writeJSON(w, http.StatusOK, map[string]any{"leave_requests": requests})
+		writeJSON(w, http.StatusOK, listResponse("leave_requests", requests))
 	}
 }
 
@@ -102,12 +118,20 @@ func applyAttendanceLeave(attendance *system.AttendanceService) http.HandlerFunc
 
 func attendanceLeaveApprovals(attendance *system.AttendanceService) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		requests, err := attendance.ListLeaveApprovals(r.Context(), authenticatedUserID(r))
+		query, err := parseListQuery(r)
 		if err != nil {
+			writeListQueryError(w, err)
+			return
+		}
+		requests, err := attendance.ListLeaveApprovals(r.Context(), authenticatedUserID(r), query)
+		if err != nil {
+			if writeListQueryError(w, err) {
+				return
+			}
 			writeAttendanceError(w, err)
 			return
 		}
-		writeJSON(w, http.StatusOK, map[string]any{"leave_requests": requests})
+		writeJSON(w, http.StatusOK, listResponse("leave_requests", requests))
 	}
 }
 
@@ -130,13 +154,21 @@ func decideAttendanceLeave(attendance *system.AttendanceService) http.HandlerFun
 
 func attendanceSelfMonthly(attendance *system.AttendanceService) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		reports, err := attendance.MonthlyReports(r.Context(), r.PathValue("month"))
+		query, err := parseListQuery(r)
 		if err != nil {
+			writeListQueryError(w, err)
+			return
+		}
+		reports, err := attendance.MonthlyReports(r.Context(), r.PathValue("month"), query)
+		if err != nil {
+			if writeListQueryError(w, err) {
+				return
+			}
 			writeAttendanceError(w, err)
 			return
 		}
 		userID := authenticatedUserID(r)
-		for _, report := range reports {
+		for _, report := range reports.Items {
 			if report.UserID == userID {
 				writeJSON(w, http.StatusOK, report)
 				return
@@ -148,12 +180,20 @@ func attendanceSelfMonthly(attendance *system.AttendanceService) http.HandlerFun
 
 func attendanceMonthlyReports(attendance *system.AttendanceService) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		reports, err := attendance.MonthlyReports(r.Context(), r.PathValue("month"))
+		query, err := parseListQuery(r)
 		if err != nil {
+			writeListQueryError(w, err)
+			return
+		}
+		reports, err := attendance.MonthlyReports(r.Context(), r.PathValue("month"), query)
+		if err != nil {
+			if writeListQueryError(w, err) {
+				return
+			}
 			writeAttendanceError(w, err)
 			return
 		}
-		writeJSON(w, http.StatusOK, map[string]any{"reports": reports})
+		writeJSON(w, http.StatusOK, listResponse("reports", reports))
 	}
 }
 

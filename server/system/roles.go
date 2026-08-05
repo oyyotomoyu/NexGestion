@@ -37,38 +37,87 @@ type UpdateRoleInput struct {
 
 func IsInitialAdministrator(userID string) bool { return userID == adminUserID }
 
-func (s *UserService) ListRoles(ctx context.Context) ([]Role, error) {
+func (s *UserService) ListRoles(ctx context.Context, query ListQuery) (ListResult[Role], error) {
+	query, sortExpression, err := NormalizeListQuery(query, "title", "asc", map[string]string{
+		"title":               "r.name COLLATE NOCASE",
+		"created_at":          "r.created_at",
+		"updated_at":          "r.updated_at",
+		"is_system":           "r.is_system",
+		"permission_count":    "permission_count",
+		"assigned_user_count": "assigned_user_count",
+	})
+	if err != nil {
+		return ListResult[Role]{}, err
+	}
 	db, err := s.open()
 	if err != nil {
-		return nil, err
+		return ListResult[Role]{}, err
 	}
 	defer db.Close()
-
-	rows, err := db.QueryContext(ctx, `SELECT id FROM roles ORDER BY name COLLATE NOCASE, id`)
+	where := []string{"1=1"}
+	args := []any{}
+	if query.Keyword != "" {
+		pattern := "%" + query.Keyword + "%"
+		where = append(where, `(r.name LIKE ? COLLATE NOCASE OR r.description LIKE ? COLLATE NOCASE OR EXISTS (
+			SELECT 1 FROM role_permissions rp JOIN permissions p ON p.id = rp.permission_id
+			WHERE rp.role_id = r.id AND p.permission_key LIKE ? COLLATE NOCASE
+		))`)
+		args = append(args, pattern, pattern, pattern)
+	}
+	if value := strings.TrimSpace(query.Filters["is_system"]); value != "" {
+		where = append(where, "r.is_system = ?")
+		args = append(args, boolFilter(value))
+	}
+	if value := strings.TrimSpace(query.Filters["grants_all_permissions"]); value != "" {
+		where = append(where, "r.grants_all_permissions = ?")
+		args = append(args, boolFilter(value))
+	}
+	if permissionKey := strings.TrimSpace(query.Filters["permission_key"]); permissionKey != "" {
+		where = append(where, `EXISTS (
+			SELECT 1 FROM permissions p
+			WHERE p.permission_key = ? AND (r.grants_all_permissions = 1 OR EXISTS (
+				SELECT 1 FROM role_permissions rp WHERE rp.role_id = r.id AND rp.permission_id = p.id
+			))
+		)`)
+		args = append(args, permissionKey)
+	}
+	whereSQL := strings.Join(where, " AND ")
+	base := `FROM roles r
+		LEFT JOIN (SELECT role_id, COUNT(*) permission_count FROM role_permissions GROUP BY role_id) pc ON pc.role_id = r.id
+		LEFT JOIN (SELECT role_id, COUNT(*) assigned_user_count FROM user_roles GROUP BY role_id) uc ON uc.role_id = r.id`
+	var total int
+	if err := db.QueryRowContext(ctx, `SELECT COUNT(*) `+base+` WHERE `+whereSQL, args...).Scan(&total); err != nil {
+		return ListResult[Role]{}, err
+	}
+	listArgs := append([]any{}, args...)
+	listArgs = append(listArgs, query.PageSize, ListOffset(query))
+	rows, err := db.QueryContext(ctx, `SELECT r.id, COALESCE(pc.permission_count,0) permission_count, COALESCE(uc.assigned_user_count,0) assigned_user_count
+		`+base+` WHERE `+whereSQL+` ORDER BY `+sortExpression+` `+query.Order+`, r.id ASC LIMIT ? OFFSET ?`, listArgs...)
 	if err != nil {
-		return nil, err
+		return ListResult[Role]{}, err
 	}
 	ids := []string{}
 	for rows.Next() {
 		var id string
-		if err := rows.Scan(&id); err != nil {
+		var permissionCount, assignedUserCount int
+		if err := rows.Scan(&id, &permissionCount, &assignedUserCount); err != nil {
 			rows.Close()
-			return nil, err
+			return ListResult[Role]{}, err
 		}
 		ids = append(ids, id)
 	}
 	if err := rows.Close(); err != nil {
-		return nil, err
+		return ListResult[Role]{}, err
 	}
 	roles := make([]Role, 0, len(ids))
 	for _, id := range ids {
 		role, err := getRole(ctx, db, id)
 		if err != nil {
-			return nil, err
+			return ListResult[Role]{}, err
 		}
 		roles = append(roles, *role)
 	}
-	return roles, nil
+	return NewListResult(roles, query, total), nil
 }
 
 func (s *UserService) GetRole(ctx context.Context, id string) (*Role, error) {
@@ -245,4 +294,13 @@ func normalizeOptionalText(value *string) any {
 		return nil
 	}
 	return trimmed
+}
+
+func boolFilter(value string) int {
+	switch strings.ToLower(strings.TrimSpace(value)) {
+	case "1", "true", "yes":
+		return 1
+	default:
+		return 0
+	}
 }

@@ -214,6 +214,18 @@ Group response:
 
 List responses wrap records in a `groups` property. Creation returns `201 Created` with a `Location` header; successful deletion returns `204 No Content`.
 
+`GET /api/groups` and `GET /api/groups/{id}/members` follow the shared List API Query Standard in [`architecture.md`](./architecture.md).
+
+Group list query definition:
+
+| Option | Definition |
+| --- | --- |
+| Response array | `groups` |
+| Keyword fields | `name`, generated manager/member role title |
+| Sort fields | `name`, `type`, `organization_level`, `status`, `member_count`, `created_at`, `updated_at` |
+| Default sort | `name asc`, then `id asc` |
+| Extra filters | `type`, `status`, `parent_group_id`, `organization_level` |
+
 Add or update member request:
 
 ```json
@@ -240,6 +252,16 @@ Member response:
 ```
 
 Member-list responses wrap records in a `members` property.
+
+Group-member list query definition:
+
+| Option | Definition |
+| --- | --- |
+| Response array | `members` |
+| Keyword fields | `display_name`, `email`, `title` |
+| Sort fields | `display_name`, `email`, `role`, `title`, `joined_at` |
+| Default sort | `display_name asc`, then `user_id asc` |
+| Extra filters | `role`, `is_primary_organization` |
 
 ## 8. Error Responses
 

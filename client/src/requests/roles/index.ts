@@ -1,4 +1,5 @@
 import { request } from "@/requests/core/client";
+import { buildListPath, listItems, type ListQuery, type ListResponse } from "@/requests/core/list";
 import type { CreateRoleInput, Role, UpdateRoleInput } from "./types";
 import type { User } from "@/requests/users/types";
 
@@ -85,10 +86,12 @@ let mockRoles: Role[] = [
   },
 ];
 
-export async function listRoles() {
+export async function listRoles(query: ListQuery = {}) {
   if (import.meta.env.DEV) return [...mockRoles];
-  const response = await request<{ roles: Role[] }>("/api/roles");
-  return response.roles;
+  const response = await request<ListResponse<Role, "roles">>(
+    buildListPath("/api/roles", { sort: "title", order: "asc", page_size: 100, ...query }),
+  );
+  return listItems(response, "roles");
 }
 
 export function getRole(id: string) {
@@ -151,5 +154,5 @@ export function deleteRole(id: string) {
   });
 }
 
-export async function listRoleUsers(id:string){if(import.meta.env.DEV)return [];const response=await request<{users:User[]}>(`/api/roles/${encodeURIComponent(id)}/users`);return response.users;}
+export async function listRoleUsers(id:string,query:ListQuery={}){if(import.meta.env.DEV)return [];const response=await request<ListResponse<User,"users">>(buildListPath(`/api/roles/${encodeURIComponent(id)}/users`,{sort:"display_name",order:"asc",page_size:100,...query}));return listItems(response,"users");}
 export function setRoleUser(roleId:string,userId:string,assign:boolean){if(import.meta.env.DEV)return Promise.resolve();return request<void>(`/api/roles/${encodeURIComponent(roleId)}/users/${encodeURIComponent(userId)}`,{method:assign?"PUT":"DELETE"});}

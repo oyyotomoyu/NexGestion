@@ -78,6 +78,28 @@ All routes require authentication.
 
 `POST` and `PATCH` validate the sender's audience permission and selected type permission from the user's effective role permissions.
 
+Notification list endpoints follow the shared List API Query Standard in [`architecture.md`](./architecture.md). This applies to `GET /api/notifications/types`, `GET /api/notifications`, and `GET /api/notifications/admin`.
+
+Notification type list query definition:
+
+| Option | Definition |
+| --- | --- |
+| Response array | `notification_types` |
+| Keyword fields | `code`, `name`, `description`, required permission key |
+| Sort fields | `severity`, `code`, `name`, `is_active` |
+| Default sort | `severity asc`, then `code asc` |
+| Extra filters | `is_active`, `required_permission_key` |
+
+Visible/admin notification list query definition:
+
+| Option | Definition |
+| --- | --- |
+| Response array | `notifications` |
+| Keyword fields | `title`, `message`, type code, sender display name |
+| Sort fields | `created_at`, `updated_at`, `show_from`, `show_until`, `status`, `type`, `title` |
+| Default sort | `updated_at desc`, then `id asc` |
+| Extra filters | `status`, `type`, `sender_user_id`, `audience_scope`, `from`, `to` |
+
 ## 6. Maintenance
 
 Notification maintenance runs hourly with server startup maintenance. It:

@@ -1,4 +1,5 @@
 import { request } from "@/requests/core/client";
+import { buildListPath, listItems, type ListQuery, type ListResponse } from "@/requests/core/list";
 import type { ReportFile } from "@/requests/reports/types";
 
 let mockFiles: ReportFile[] = [
@@ -10,10 +11,12 @@ let mockFiles: ReportFile[] = [
   },
 ];
 
-export async function listReportFiles() {
+export async function listReportFiles(query: ListQuery = {}) {
   if (import.meta.env.DEV) return [...mockFiles];
-  const response = await request<{ files: ReportFile[] }>("/api/reports/files");
-  return response.files;
+  const response = await request<ListResponse<ReportFile, "files">>(
+    buildListPath("/api/reports/files", { sort: "modified_at", order: "desc", page_size: 100, ...query }),
+  );
+  return listItems(response, "files");
 }
 
 export function reportFileDownloadURL(path: string) {

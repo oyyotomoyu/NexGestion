@@ -390,6 +390,38 @@ All endpoints require authentication and request-level permission middleware.
 | `GET` | `/api/attendance/reports/{month}/csv` | `attendance.reports.read` | Download the official monthly CSV |
 | `PATCH` | `/api/attendance/days/{id}` | `attendance.manage` | Correct a daily record with a reason |
 
+Attendance list endpoints follow the shared List API Query Standard in [`architecture.md`](./architecture.md). This applies to `GET /api/attendance/days`, `GET /api/attendance/users/{userId}/days`, `GET /api/attendance/leave-requests`, `GET /api/attendance/leave-approvals`, and `GET /api/attendance/reports/{month}`.
+
+Attendance-day list query definition:
+
+| Option | Definition |
+| --- | --- |
+| Response array | `days` |
+| Keyword fields | Attendance date, status, timezone |
+| Sort fields | `attendance_date`, `status`, `worked_minutes`, `requires_review`, `updated_at` |
+| Default sort | `attendance_date desc`, then `id asc` |
+| Extra filters | `month`, `status`, `requires_review` |
+
+Leave-request and approval list query definition:
+
+| Option | Definition |
+| --- | --- |
+| Response array | `leave_requests` |
+| Keyword fields | requester name, leave type, leave date, reason, status |
+| Sort fields | `leave_date`, `created_at`, `updated_at`, `status`, `leave_type`, `requested_minutes` |
+| Default sort | `created_at desc`, then `id asc` |
+| Extra filters | `status`, `leave_type`, `duration_type`, `leave_date`, `from`, `to` |
+
+Monthly attendance report list query definition:
+
+| Option | Definition |
+| --- | --- |
+| Response array | `reports` |
+| Keyword fields | `display_name`, employee number, timezone |
+| Sort fields | `display_name`, `employee_number`, `worked_minutes`, `present_days`, `absent_days`, `incomplete_days`, `generated_at` |
+| Default sort | `display_name asc`, then `user_id asc` |
+| Extra filters | `timezone`, `has_incomplete_days` |
+
 Sign-in and sign-out requests contain no client timestamp:
 
 ```json

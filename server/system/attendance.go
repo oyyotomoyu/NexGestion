@@ -274,47 +274,76 @@ func (s *AttendanceService) SignOut(ctx context.Context, userID string) (*Attend
 	return s.getDay(ctx, db, dayID)
 }
 
-func (s *AttendanceService) ListDays(ctx context.Context, userID, month string) ([]AttendanceDay, error) {
+func (s *AttendanceService) ListDays(ctx context.Context, userID, month string, query ListQuery) (ListResult[AttendanceDay], error) {
+	query, sortExpression, err := NormalizeListQuery(query, "attendance_date", "desc", map[string]string{
+		"attendance_date": "attendance_date",
+		"status":          "status",
+		"worked_minutes":  "total_worked_minutes",
+		"requires_review": "requires_review",
+		"updated_at":      "updated_at",
+	})
+	if err != nil {
+		return ListResult[AttendanceDay]{}, err
+	}
 	db, err := s.open()
 	if err != nil {
-		return nil, err
+		return ListResult[AttendanceDay]{}, err
 	}
 	defer db.Close()
-	query := `SELECT id FROM attendance_days WHERE user_id=?`
+	where := []string{"user_id=?"}
 	args := []any{userID}
 	if month != "" {
 		if _, err := parseAttendanceMonth(month); err != nil {
-			return nil, err
+			return ListResult[AttendanceDay]{}, err
 		}
-		query += ` AND attendance_date LIKE ?`
+		where = append(where, "attendance_date LIKE ?")
 		args = append(args, month+"-%")
 	}
-	query += ` ORDER BY attendance_date DESC`
-	rows, err := db.QueryContext(ctx, query, args...)
+	if query.Keyword != "" {
+		pattern := "%" + query.Keyword + "%"
+		where = append(where, `(attendance_date LIKE ? COLLATE NOCASE OR status LIKE ? COLLATE NOCASE OR timezone LIKE ? COLLATE NOCASE)`)
+		args = append(args, pattern, pattern, pattern)
+	}
+	if status := strings.TrimSpace(query.Filters["status"]); status != "" {
+		where = append(where, "status = ?")
+		args = append(args, status)
+	}
+	if value := strings.TrimSpace(query.Filters["requires_review"]); value != "" {
+		where = append(where, "requires_review = ?")
+		args = append(args, boolFilter(value))
+	}
+	whereSQL := strings.Join(where, " AND ")
+	var total int
+	if err := db.QueryRowContext(ctx, `SELECT COUNT(*) FROM attendance_days WHERE `+whereSQL, args...).Scan(&total); err != nil {
+		return ListResult[AttendanceDay]{}, err
+	}
+	listArgs := append([]any{}, args...)
+	listArgs = append(listArgs, query.PageSize, ListOffset(query))
+	rows, err := db.QueryContext(ctx, `SELECT id FROM attendance_days WHERE `+whereSQL+` ORDER BY `+sortExpression+` `+query.Order+`, id ASC LIMIT ? OFFSET ?`, listArgs...)
 	if err != nil {
-		return nil, err
+		return ListResult[AttendanceDay]{}, err
 	}
 	var ids []string
 	for rows.Next() {
 		var id string
 		if err := rows.Scan(&id); err != nil {
 			rows.Close()
-			return nil, err
+			return ListResult[AttendanceDay]{}, err
 		}
 		ids = append(ids, id)
 	}
 	if err := rows.Close(); err != nil {
-		return nil, err
+		return ListResult[AttendanceDay]{}, err
 	}
 	result := make([]AttendanceDay, 0, len(ids))
 	for _, id := range ids {
 		day, err := s.getDay(ctx, db, id)
 		if err != nil {
-			return nil, err
+			return ListResult[AttendanceDay]{}, err
 		}
 		result = append(result, *day)
 	}
-	return result, nil
+	return NewListResult(result, query, total), nil
 }
 
 func (s *AttendanceService) CorrectDay(ctx context.Context, actorUserID, dayID string, input CorrectAttendanceDayInput) (*AttendanceDay, error) {
@@ -617,7 +646,7 @@ func (s *AttendanceService) GenerateMonthlyCSV(ctx context.Context, month string
 	if err != nil {
 		return nil, err
 	}
-	users, err := s.users.List(ctx)
+	users, err := s.users.ListAll(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -774,47 +803,85 @@ func weekdayCount(year int, month time.Month) int {
 	return count
 }
 
-func (s *AttendanceService) MonthlyReports(ctx context.Context, month string) ([]AttendanceMonthlyReport, error) {
+func (s *AttendanceService) MonthlyReports(ctx context.Context, month string, query ListQuery) (ListResult[AttendanceMonthlyReport], error) {
+	query, sortExpression, err := NormalizeListQuery(query, "display_name", "asc", map[string]string{
+		"display_name":    "u.display_name COLLATE NOCASE",
+		"employee_number": "ep.employee_number COLLATE NOCASE",
+		"worked_minutes":  "amr.worked_minutes",
+		"present_days":    "amr.present_days",
+		"absent_days":     "amr.absent_days",
+		"incomplete_days": "amr.incomplete_days",
+		"generated_at":    "amr.generated_at",
+	})
+	if err != nil {
+		return ListResult[AttendanceMonthlyReport]{}, err
+	}
 	if _, err := parseAttendanceMonth(month); err != nil {
-		return nil, err
+		return ListResult[AttendanceMonthlyReport]{}, err
 	}
 	db, err := s.open()
 	if err != nil {
-		return nil, err
+		return ListResult[AttendanceMonthlyReport]{}, err
 	}
 	defer db.Close()
-	users, err := s.users.List(ctx)
-	if err != nil {
-		return nil, err
+	where := []string{"amr.report_month=?"}
+	args := []any{month}
+	if query.Keyword != "" {
+		pattern := "%" + query.Keyword + "%"
+		where = append(where, `(u.display_name LIKE ? COLLATE NOCASE OR ep.employee_number LIKE ? COLLATE NOCASE OR amr.timezone LIKE ? COLLATE NOCASE)`)
+		args = append(args, pattern, pattern, pattern)
 	}
-	userMap := make(map[string]User, len(users))
-	for _, user := range users {
-		userMap[user.ID] = user
+	if timezone := strings.TrimSpace(query.Filters["timezone"]); timezone != "" {
+		where = append(where, "amr.timezone = ?")
+		args = append(args, timezone)
 	}
-	rows, err := db.QueryContext(ctx, `SELECT id,user_id,report_month,timezone,scheduled_work_days,present_days,
-		absent_days,incomplete_days,worked_minutes,worked_hours,generated_at
-		FROM attendance_monthly_reports WHERE report_month=? ORDER BY user_id`, month)
+	if value := strings.TrimSpace(query.Filters["has_incomplete_days"]); value != "" {
+		if boolFilter(value) == 1 {
+			where = append(where, "amr.incomplete_days > 0")
+		} else {
+			where = append(where, "amr.incomplete_days = 0")
+		}
+	}
+	whereSQL := strings.Join(where, " AND ")
+	base := `FROM attendance_monthly_reports amr
+		LEFT JOIN user_db.users u ON u.id = amr.user_id
+		LEFT JOIN user_db.employee_profiles ep ON ep.user_id = amr.user_id`
+	userDB, err := s.users.open()
 	if err != nil {
-		return nil, err
+		return ListResult[AttendanceMonthlyReport]{}, err
+	}
+	defer userDB.Close()
+	if _, err := db.ExecContext(ctx, `ATTACH DATABASE ? AS user_db`, s.users.databasePath); err != nil {
+		return ListResult[AttendanceMonthlyReport]{}, err
+	}
+	defer db.ExecContext(ctx, `DETACH DATABASE user_db`)
+	var total int
+	if err := db.QueryRowContext(ctx, `SELECT COUNT(*) `+base+` WHERE `+whereSQL, args...).Scan(&total); err != nil {
+		return ListResult[AttendanceMonthlyReport]{}, err
+	}
+	listArgs := append([]any{}, args...)
+	listArgs = append(listArgs, query.PageSize, ListOffset(query))
+	rows, err := db.QueryContext(ctx, `SELECT amr.id,amr.user_id,COALESCE(ep.employee_number,''),COALESCE(u.display_name,''),amr.report_month,amr.timezone,amr.scheduled_work_days,amr.present_days,
+		amr.absent_days,amr.incomplete_days,amr.worked_minutes,amr.worked_hours,amr.generated_at
+		`+base+` WHERE `+whereSQL+` ORDER BY `+sortExpression+` `+query.Order+`, amr.user_id ASC LIMIT ? OFFSET ?`, listArgs...)
+	if err != nil {
+		return ListResult[AttendanceMonthlyReport]{}, err
 	}
 	defer rows.Close()
 	result := []AttendanceMonthlyReport{}
 	for rows.Next() {
 		var report AttendanceMonthlyReport
-		if err := rows.Scan(&report.ID, &report.UserID, &report.ReportMonth, &report.Timezone, &report.ScheduledWorkDays,
+		if err := rows.Scan(&report.ID, &report.UserID, &report.EmployeeNumber, &report.DisplayName, &report.ReportMonth, &report.Timezone, &report.ScheduledWorkDays,
 			&report.PresentDays, &report.AbsentDays, &report.IncompleteDays, &report.WorkedMinutes,
 			&report.WorkedHours, &report.GeneratedAt); err != nil {
-			return nil, err
-		}
-		if user, ok := userMap[report.UserID]; ok {
-			report.DisplayName = user.DisplayName
-			if user.EmployeeProfile != nil {
-				report.EmployeeNumber = user.EmployeeProfile.EmployeeNumber
-			}
+			return ListResult[AttendanceMonthlyReport]{}, err
 		}
 		result = append(result, report)
 	}
-	return result, rows.Err()
+	if err := rows.Err(); err != nil {
+		return ListResult[AttendanceMonthlyReport]{}, err
+	}
+	return NewListResult(result, query, total), nil
 }
 
 func (s *AttendanceService) CSVPath(ctx context.Context, month string) (string, error) {
@@ -864,7 +931,7 @@ func (s *AttendanceService) Cleanup(ctx context.Context) error {
 }
 
 func (s *AttendanceService) RunMaintenance(ctx context.Context) error {
-	users, err := s.users.List(ctx)
+	users, err := s.users.ListAll(ctx)
 	if err != nil {
 		return err
 	}

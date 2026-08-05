@@ -40,10 +40,30 @@ func readLogs(service *applogs.Service) http.HandlerFunc {
 				return
 			}
 		}
-		result, err := service.Read(applogs.Query{Start: start, End: end, Statuses: statuses, Limit: limit, Cursor: r.URL.Query().Get("cursor")})
+		listQuery, err := parseListQuery(r)
+		if err != nil {
+			writeListQueryError(w, err)
+			return
+		}
+		if r.URL.Query().Get("cursor") != "" && (r.URL.Query().Get("page") != "" || r.URL.Query().Get("page_size") != "") {
+			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "cursor pagination cannot be combined with page pagination"})
+			return
+		}
+		result, err := service.Read(applogs.Query{
+			Start:    start,
+			End:      end,
+			Statuses: statuses,
+			Limit:    limit,
+			Cursor:   r.URL.Query().Get("cursor"),
+			Page:     listQuery.Page,
+			PageSize: listQuery.PageSize,
+			Keyword:  listQuery.Keyword,
+			Sort:     listQuery.Sort,
+			Order:    listQuery.Order,
+		})
 		if err != nil {
 			status := http.StatusInternalServerError
-			if errors.Is(err, applogs.ErrInvalidStatus) || err.Error() == "invalid cursor" {
+			if errors.Is(err, applogs.ErrInvalidStatus) || err.Error() == "invalid cursor" || strings.HasPrefix(err.Error(), "invalid ") {
 				status = http.StatusBadRequest
 			}
 			message := "unable to read logs"
@@ -53,7 +73,21 @@ func readLogs(service *applogs.Service) http.HandlerFunc {
 			writeJSON(w, status, map[string]string{"error": message})
 			return
 		}
-		writeJSON(w, http.StatusOK, result)
+		writeJSON(w, http.StatusOK, map[string]any{
+			"logs":        result.Logs,
+			"next_cursor": result.NextCursor,
+			"pagination": map[string]int{
+				"page":        result.Page,
+				"page_size":   result.PageSize,
+				"total":       result.Total,
+				"total_pages": result.TotalPages,
+			},
+			"sort": map[string]string{
+				"field": result.Sort,
+				"order": result.Order,
+			},
+			"keyword": result.Keyword,
+		})
 	}
 }
 

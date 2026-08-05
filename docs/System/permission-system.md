@@ -70,6 +70,17 @@ Current mappings:
 
 `server/apis/access_control.go` owns the allow/deny function and permission middleware. The system package supplies role and permission data but does not authorize ordinary API requests. System services retain only domain invariants, such as protecting the Admin role. Route middleware is the mandatory authorization boundary.
 
+`GET /api/permissions` follows the shared List API Query Standard in [`architecture.md`](./architecture.md). The response array property is `permissions`.
+
+Permission list query definition:
+
+| Option | Definition |
+| --- | --- |
+| Keyword fields | `permission_key`, `module`, `description` |
+| Sort fields | `permission_key`, `module` |
+| Default sort | `permission_key asc`, then `id asc` |
+| Extra filters | `module` |
+
 ## 4. Role Permission Editing
 
 The protected initial administrator can edit a custom role's permissions from the role detail screen. Each catalog permission is represented as a true/false checkbox:

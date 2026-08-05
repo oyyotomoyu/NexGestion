@@ -41,11 +41,23 @@ type Query struct {
 	Statuses map[string]bool
 	Limit    int
 	Cursor   string
+	Page     int
+	PageSize int
+	Keyword  string
+	Sort     string
+	Order    string
 }
 
 type QueryResult struct {
 	Logs       []Record `json:"logs"`
 	NextCursor string   `json:"next_cursor"`
+	Page       int      `json:"-"`
+	PageSize   int      `json:"-"`
+	Total      int      `json:"-"`
+	TotalPages int      `json:"-"`
+	Sort       string   `json:"-"`
+	Order      string   `json:"-"`
+	Keyword    string   `json:"-"`
 }
 
 type Service struct {
@@ -132,6 +144,21 @@ func (s *Service) write(now time.Time, status, ip, userID, content string) error
 }
 
 func (s *Service) Read(query Query) (*QueryResult, error) {
+	query.Keyword = strings.TrimSpace(query.Keyword)
+	query.Sort = strings.TrimSpace(query.Sort)
+	if query.Sort == "" {
+		query.Sort = "timestamp"
+	}
+	query.Order = strings.ToLower(strings.TrimSpace(query.Order))
+	if query.Order == "" {
+		query.Order = "desc"
+	}
+	if query.Sort != "timestamp" && query.Sort != "status" {
+		return nil, errors.New("invalid sort")
+	}
+	if query.Order != "asc" && query.Order != "desc" {
+		return nil, errors.New("invalid order")
+	}
 	if query.Limit <= 0 {
 		query.Limit = 100
 	}
@@ -169,19 +196,56 @@ func (s *Service) Read(query Query) (*QueryResult, error) {
 			if len(query.Statuses) > 0 && !query.Statuses[record.Status] {
 				continue
 			}
+			if query.Keyword != "" {
+				keyword := strings.ToLower(query.Keyword)
+				if !strings.Contains(strings.ToLower(record.Content), keyword) &&
+					!strings.Contains(strings.ToLower(record.UserID), keyword) &&
+					!strings.Contains(strings.ToLower(record.IP), keyword) {
+					continue
+				}
+			}
 			records = append(records, record)
 		}
 	}
-	sort.Slice(records, func(i, j int) bool { return records[i].Timestamp > records[j].Timestamp })
+	sort.Slice(records, func(i, j int) bool {
+		var less bool
+		if query.Sort == "status" {
+			less = records[i].Status < records[j].Status || (records[i].Status == records[j].Status && records[i].Timestamp < records[j].Timestamp)
+		} else {
+			less = records[i].Timestamp < records[j].Timestamp
+		}
+		if query.Order == "desc" {
+			return !less && records[i] != records[j]
+		}
+		return less
+	})
 	if offset > len(records) {
 		return nil, errors.New("invalid cursor")
+	}
+	total := len(records)
+	if query.Cursor == "" && query.PageSize > 0 {
+		if query.Page < 1 {
+			return nil, errors.New("invalid page")
+		}
+		offset = (query.Page - 1) * query.PageSize
+		query.Limit = query.PageSize
 	}
 	end := offset + query.Limit
 	if end > len(records) {
 		end = len(records)
 	}
-	result := &QueryResult{Logs: records[offset:end]}
-	if end < len(records) {
+	if offset > len(records) {
+		offset = len(records)
+	}
+	result := &QueryResult{Logs: records[offset:end], Total: total, Sort: query.Sort, Order: query.Order, Keyword: query.Keyword}
+	if query.PageSize > 0 {
+		result.Page = query.Page
+		result.PageSize = query.PageSize
+		if total > 0 {
+			result.TotalPages = (total + query.PageSize - 1) / query.PageSize
+		}
+	}
+	if query.Cursor != "" && end < len(records) {
 		result.NextCursor = base64.RawURLEncoding.EncodeToString([]byte(strconv.Itoa(end)))
 	}
 	return result, nil

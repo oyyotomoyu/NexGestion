@@ -127,6 +127,28 @@ Role response:
 
 List responses wrap the records in a `roles` property. Creation returns `201 Created` with a `Location` header; successful deletion returns `204 No Content`.
 
+`GET /api/roles` and `GET /api/roles/{id}/users` follow the shared List API Query Standard in [`architecture.md`](./architecture.md).
+
+Role list query definition:
+
+| Option | Definition |
+| --- | --- |
+| Response array | `roles` |
+| Keyword fields | `title`, `description`, permission key |
+| Sort fields | `title`, `created_at`, `updated_at`, `is_system`, `permission_count`, `assigned_user_count` |
+| Default sort | `title asc`, then `id asc` |
+| Extra filters | `is_system`, `grants_all_permissions`, `permission_key` |
+
+Role-user list query definition:
+
+| Option | Definition |
+| --- | --- |
+| Response array | `users` |
+| Keyword fields | `display_name`, `email`, employee number |
+| Sort fields | `display_name`, `email`, `created_at`, `assigned_at` |
+| Default sort | `display_name asc`, then `id asc` |
+| Extra filters | None |
+
 ## 6. Frontend
 
 Role management is available under **Settings → Access Control → Roles**. The page lists role metadata and assigned permission counts. Authorized users can create, edit, and delete custom roles, while only the protected initial administrator sees controls for changing permission grants. Other role managers see the assigned permissions read-only. Role assignment is intentionally user-centric: custom roles are assigned from **Settings → Users → User Detail**, which remains practical when the organization has many users. Generated group roles are managed only through group membership. System roles are displayed as protected.

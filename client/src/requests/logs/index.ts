@@ -15,6 +15,11 @@ export function listLogs(query: LogQuery = {}) {
   }
   if (query.limit != null) parameters.set("limit", String(query.limit));
   if (query.cursor) parameters.set("cursor", query.cursor);
+  if (query.page != null) parameters.set("page", String(query.page));
+  if (query.page_size != null) parameters.set("page_size", String(query.page_size));
+  if (query.keyword) parameters.set("keyword", query.keyword);
+  if (query.sort) parameters.set("sort", query.sort);
+  if (query.order) parameters.set("order", query.order);
 
   const queryString = parameters.toString();
   return request<LogResponse>(`/api/logs${queryString ? `?${queryString}` : ""}`);

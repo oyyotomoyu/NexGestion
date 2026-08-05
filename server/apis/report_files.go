@@ -11,12 +11,20 @@ import (
 
 func listReportFiles(reports *system.ReportFileService) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		files, err := reports.List()
+		query, err := parseListQuery(r)
 		if err != nil {
+			writeListQueryError(w, err)
+			return
+		}
+		files, err := reports.List(query)
+		if err != nil {
+			if writeListQueryError(w, err) {
+				return
+			}
 			writeReportFileError(w, err)
 			return
 		}
-		writeJSON(w, http.StatusOK, map[string]any{"files": files})
+		writeJSON(w, http.StatusOK, listResponse("files", files))
 	}
 }
 

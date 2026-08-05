@@ -46,11 +46,11 @@ func TestNotificationCreateListUpdateHideAndExport(t *testing.T) {
 		t.Fatalf("unexpected created notification: %+v", created)
 	}
 
-	inbox, err := service.ListForUser(ctx, adminUserID)
+	inbox, err := service.ListForUser(ctx, adminUserID, ListQuery{})
 	if err != nil {
 		t.Fatalf("list notifications: %v", err)
 	}
-	if len(inbox) != 1 || inbox[0].ID != created.ID {
+	if len(inbox.Items) != 1 || inbox.Items[0].ID != created.ID {
 		t.Fatalf("expected created notification in inbox, got %+v", inbox)
 	}
 
@@ -74,11 +74,11 @@ func TestNotificationCreateListUpdateHideAndExport(t *testing.T) {
 	if err := service.Hide(ctx, adminUserID, created.ID); err != nil {
 		t.Fatalf("hide notification: %v", err)
 	}
-	hiddenInbox, err := service.ListForUser(ctx, adminUserID)
+	hiddenInbox, err := service.ListForUser(ctx, adminUserID, ListQuery{})
 	if err != nil {
 		t.Fatalf("list after hide: %v", err)
 	}
-	if len(hiddenInbox) != 0 {
+	if len(hiddenInbox.Items) != 0 {
 		t.Fatalf("hidden notification should not show, got %+v", hiddenInbox)
 	}
 }
@@ -156,11 +156,11 @@ func TestNotificationOwnGroupRequiresMembership(t *testing.T) {
 	if err != nil {
 		t.Fatalf("create own group notification: %v", err)
 	}
-	inbox, err := service.ListForUser(ctx, adminUserID)
+	inbox, err := service.ListForUser(ctx, adminUserID, ListQuery{})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(inbox) != 1 || inbox[0].ID != created.ID {
+	if len(inbox.Items) != 1 || inbox.Items[0].ID != created.ID {
 		t.Fatalf("expected own group notification in inbox, got %+v", inbox)
 	}
 }

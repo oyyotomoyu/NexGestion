@@ -1,4 +1,5 @@
 import { request } from "@/requests/core/client";
+import { buildListPath, listItems, type ListQuery, type ListResponse } from "@/requests/core/list";
 import type { CreateGroupInput, Group, GroupMember, SetGroupMemberInput, UpdateGroupInput } from "./types";
 
 let mockGroups: Group[] = [
@@ -41,10 +42,12 @@ let mockGroupMembers: Record<string, GroupMember[]> = {
   }],
 };
 
-export async function listGroups() {
+export async function listGroups(query: ListQuery = {}) {
   if (import.meta.env.DEV) return [...mockGroups];
-  const response = await request<{ groups: Group[] }>("/api/groups");
-  return response.groups;
+  const response = await request<ListResponse<Group, "groups">>(
+    buildListPath("/api/groups", { sort: "name", order: "asc", page_size: 100, ...query }),
+  );
+  return listItems(response, "groups");
 }
 
 export function getGroup(id: string) {
@@ -98,10 +101,12 @@ export function deleteGroup(id: string) {
   return request<void>(`/api/groups/${encodeURIComponent(id)}`, { method: "DELETE" });
 }
 
-export async function listGroupMembers(id: string) {
+export async function listGroupMembers(id: string, query: ListQuery = {}) {
   if (import.meta.env.DEV) return [...(mockGroupMembers[id] || [])];
-  const response = await request<{ members: GroupMember[] }>(`/api/groups/${encodeURIComponent(id)}/members`);
-  return response.members;
+  const response = await request<ListResponse<GroupMember, "members">>(
+    buildListPath(`/api/groups/${encodeURIComponent(id)}/members`, { sort: "display_name", order: "asc", page_size: 100, ...query }),
+  );
+  return listItems(response, "members");
 }
 
 export function setGroupMember(groupId: string, userId: string, input: SetGroupMemberInput) {

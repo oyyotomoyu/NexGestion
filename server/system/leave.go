@@ -244,31 +244,55 @@ func leaveAssignmentNote(route *LeaveApprovalRoute) string {
 	return "assigned"
 }
 
-func (s *AttendanceService) ListLeaveRequests(ctx context.Context, userID string) ([]LeaveRequest, error) {
+func (s *AttendanceService) ListLeaveRequests(ctx context.Context, userID string, query ListQuery) (ListResult[LeaveRequest], error) {
+	query, sortExpression, err := NormalizeListQuery(query, "created_at", "desc", map[string]string{
+		"leave_date":        "leave_date",
+		"created_at":        "created_at",
+		"updated_at":        "updated_at",
+		"status":            "status",
+		"leave_type":        "leave_type",
+		"requested_minutes": "requested_minutes",
+	})
+	if err != nil {
+		return ListResult[LeaveRequest]{}, err
+	}
 	if _, err := s.users.Get(ctx, userID); err != nil {
-		return nil, err
+		return ListResult[LeaveRequest]{}, err
 	}
 	db, err := s.open()
 	if err != nil {
-		return nil, err
+		return ListResult[LeaveRequest]{}, err
 	}
 	defer db.Close()
+	where := []string{"user_id=?"}
+	args := []any{userID}
+	applyLeaveListFilters(&where, &args, query)
+	whereSQL := strings.Join(where, " AND ")
+	var total int
+	if err := db.QueryRowContext(ctx, `SELECT COUNT(*) FROM leave_requests WHERE `+whereSQL, args...).Scan(&total); err != nil {
+		return ListResult[LeaveRequest]{}, err
+	}
+	listArgs := append([]any{}, args...)
+	listArgs = append(listArgs, query.PageSize, ListOffset(query))
 	rows, err := db.QueryContext(ctx, `SELECT id,user_id,leave_type,leave_date,duration_type,start_time,end_time,
 		requested_minutes,reason,status,created_at,updated_at
-		FROM leave_requests WHERE user_id=? ORDER BY leave_date DESC,created_at DESC`, userID)
+		FROM leave_requests WHERE `+whereSQL+` ORDER BY `+sortExpression+` `+query.Order+`, id ASC LIMIT ? OFFSET ?`, listArgs...)
 	if err != nil {
-		return nil, err
+		return ListResult[LeaveRequest]{}, err
 	}
 	defer rows.Close()
 	requests := make([]LeaveRequest, 0)
 	for rows.Next() {
 		var request LeaveRequest
 		if err := scanLeaveRequest(rows, &request); err != nil {
-			return nil, err
+			return ListResult[LeaveRequest]{}, err
 		}
 		requests = append(requests, request)
 	}
-	return requests, rows.Err()
+	if err := rows.Err(); err != nil {
+		return ListResult[LeaveRequest]{}, err
+	}
+	return NewListResult(requests, query, total), nil
 }
 
 func (s *AttendanceService) getLeaveRequest(ctx context.Context, db *sql.DB, id string) (*LeaveRequest, error) {
@@ -286,26 +310,46 @@ func scanLeaveRequest(scanner leaveScanner, request *LeaveRequest) error {
 		&request.Reason, &request.Status, &request.CreatedAt, &request.UpdatedAt)
 }
 
-func (s *AttendanceService) ListLeaveApprovals(ctx context.Context, approverID string) ([]LeaveApprovalRequest, error) {
+func (s *AttendanceService) ListLeaveApprovals(ctx context.Context, approverID string, query ListQuery) (ListResult[LeaveApprovalRequest], error) {
+	query, sortExpression, err := NormalizeListQuery(query, "created_at", "desc", map[string]string{
+		"leave_date":        "lr.leave_date",
+		"created_at":        "lr.created_at",
+		"updated_at":        "lr.updated_at",
+		"status":            "lr.status",
+		"leave_type":        "lr.leave_type",
+		"requested_minutes": "lr.requested_minutes",
+	})
+	if err != nil {
+		return ListResult[LeaveApprovalRequest]{}, err
+	}
 	if _, err := s.users.Get(ctx, approverID); err != nil {
-		return nil, err
+		return ListResult[LeaveApprovalRequest]{}, err
 	}
 	if err := s.backfillLeaveAssignments(ctx); err != nil {
-		return nil, err
+		return ListResult[LeaveApprovalRequest]{}, err
 	}
 	db, err := s.open()
 	if err != nil {
-		return nil, err
+		return ListResult[LeaveApprovalRequest]{}, err
 	}
 	defer db.Close()
+	where := []string{"a.approver_user_id=?"}
+	args := []any{approverID}
+	applyLeaveListFilters(&where, &args, query)
+	whereSQL := strings.Join(where, " AND ")
+	var total int
+	if err := db.QueryRowContext(ctx, `SELECT COUNT(*) FROM leave_requests lr JOIN leave_request_assignments a ON a.leave_request_id=lr.id WHERE `+whereSQL, args...).Scan(&total); err != nil {
+		return ListResult[LeaveApprovalRequest]{}, err
+	}
+	listArgs := append([]any{}, args...)
+	listArgs = append(listArgs, query.PageSize, ListOffset(query))
 	rows, err := db.QueryContext(ctx, `SELECT lr.id,lr.user_id,lr.leave_type,lr.leave_date,lr.duration_type,
 		lr.start_time,lr.end_time,lr.requested_minutes,lr.reason,lr.status,lr.created_at,lr.updated_at,
 		a.organization_group_id,a.is_administrator_route
 		FROM leave_requests lr JOIN leave_request_assignments a ON a.leave_request_id=lr.id
-		WHERE a.approver_user_id=? ORDER BY CASE lr.status WHEN 'pending' THEN 0 ELSE 1 END,
-			lr.leave_date,lr.created_at DESC`, approverID)
+		WHERE `+whereSQL+` ORDER BY `+sortExpression+` `+query.Order+`, lr.id ASC LIMIT ? OFFSET ?`, listArgs...)
 	if err != nil {
-		return nil, err
+		return ListResult[LeaveApprovalRequest]{}, err
 	}
 	defer rows.Close()
 	var requests []LeaveApprovalRequest
@@ -315,16 +359,41 @@ func (s *AttendanceService) ListLeaveApprovals(ctx context.Context, approverID s
 			&item.DurationType, &item.StartTime, &item.EndTime, &item.RequestedMinutes,
 			&item.Reason, &item.Status, &item.CreatedAt, &item.UpdatedAt,
 			&item.OrganizationGroupID, &item.AdministratorRoute); err != nil {
-			return nil, err
+			return ListResult[LeaveApprovalRequest]{}, err
 		}
 		user, err := s.users.Get(ctx, item.UserID)
 		if err != nil {
-			return nil, err
+			return ListResult[LeaveApprovalRequest]{}, err
 		}
 		item.RequesterName = user.DisplayName
 		requests = append(requests, item)
 	}
-	return requests, rows.Err()
+	if err := rows.Err(); err != nil {
+		return ListResult[LeaveApprovalRequest]{}, err
+	}
+	return NewListResult(requests, query, total), nil
+}
+
+func applyLeaveListFilters(where *[]string, args *[]any, query ListQuery) {
+	if query.Keyword != "" {
+		pattern := "%" + query.Keyword + "%"
+		*where = append(*where, `(leave_type LIKE ? COLLATE NOCASE OR leave_date LIKE ? COLLATE NOCASE OR reason LIKE ? COLLATE NOCASE OR status LIKE ? COLLATE NOCASE)`)
+		*args = append(*args, pattern, pattern, pattern, pattern)
+	}
+	for _, filter := range []string{"status", "leave_type", "duration_type", "leave_date"} {
+		if value := strings.TrimSpace(query.Filters[filter]); value != "" {
+			*where = append(*where, filter+" = ?")
+			*args = append(*args, value)
+		}
+	}
+	if from := strings.TrimSpace(query.Filters["from"]); from != "" {
+		*where = append(*where, "leave_date >= ?")
+		*args = append(*args, from)
+	}
+	if to := strings.TrimSpace(query.Filters["to"]); to != "" {
+		*where = append(*where, "leave_date <= ?")
+		*args = append(*args, to)
+	}
 }
 
 func (s *AttendanceService) backfillLeaveAssignments(ctx context.Context) error {

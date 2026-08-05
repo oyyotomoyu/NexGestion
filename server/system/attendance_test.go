@@ -85,11 +85,11 @@ func TestAttendanceSplitsOpenSessionAtLocalMidnight(t *testing.T) {
 	if current.Sessions[0].SignInAt != "2026-07-28T16:00:00Z" || current.Sessions[0].ContinuedFromSessionID == nil {
 		t.Fatalf("continuation session: %+v", current.Sessions[0])
 	}
-	days, err := service.ListDays(ctx, userID, "2026-07")
+	days, err := service.ListDays(ctx, userID, "2026-07", ListQuery{})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(days) != 2 || days[1].WorkedMinutes != 30 {
+	if len(days.Items) != 2 || days.Items[1].WorkedMinutes != 30 {
 		t.Fatalf("split days: %+v", days)
 	}
 	finished, err := service.SignOut(ctx, userID)
@@ -117,11 +117,11 @@ func TestAttendanceUsesEachUsersTimezoneForMidnight(t *testing.T) {
 		current.Sessions[0].SignInAt != "2026-01-06T05:00:00Z" {
 		t.Fatalf("New York rollover: %+v", current)
 	}
-	days, err := service.ListDays(ctx, userID, "2026-01")
+	days, err := service.ListDays(ctx, userID, "2026-01", ListQuery{})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(days) != 2 || days[1].WorkedMinutes != 15 {
+	if len(days.Items) != 2 || days.Items[1].WorkedMinutes != 15 {
 		t.Fatalf("New York split days: %+v", days)
 	}
 }
@@ -230,9 +230,9 @@ func TestLeaveRequestsSupportFullDayAndHourlyDurations(t *testing.T) {
 	if hourly.RequestedMinutes != 90 || hourly.Status != "pending" {
 		t.Fatalf("hourly request: %+v", hourly)
 	}
-	requests, err := service.ListLeaveRequests(ctx, userID)
-	if err != nil || len(requests) != 2 {
-		t.Fatalf("leave requests: count=%d error=%v", len(requests), err)
+	requests, err := service.ListLeaveRequests(ctx, userID, ListQuery{})
+	if err != nil || len(requests.Items) != 2 {
+		t.Fatalf("leave requests: count=%d error=%v", len(requests.Items), err)
 	}
 }
 
@@ -284,8 +284,8 @@ func TestLeaveRequestRoutesToOrganizationManagerAndCanBeApproved(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	inbox, err := service.ListLeaveApprovals(ctx, manager.ID)
-	if err != nil || len(inbox) != 1 || inbox[0].ID != request.ID || inbox[0].RequesterName == "" {
+	inbox, err := service.ListLeaveApprovals(ctx, manager.ID, ListQuery{})
+	if err != nil || len(inbox.Items) != 1 || inbox.Items[0].ID != request.ID || inbox.Items[0].RequesterName == "" {
 		t.Fatalf("manager inbox: %+v error=%v", inbox, err)
 	}
 	decided, err := service.DecideLeave(ctx, manager.ID, request.ID, DecideLeaveInput{

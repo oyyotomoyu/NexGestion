@@ -48,12 +48,20 @@ func userHasPermission(ctx context.Context, users *system.UserService, userID, r
 
 func listPermissions(users *system.UserService) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		items, err := users.ListPermissions(r.Context())
+		query, err := parseListQuery(r)
 		if err != nil {
+			writeListQueryError(w, err)
+			return
+		}
+		items, err := users.ListPermissions(r.Context(), query)
+		if err != nil {
+			if writeListQueryError(w, err) {
+				return
+			}
 			writeSystemError(w, err)
 			return
 		}
-		writeJSON(w, http.StatusOK, map[string]any{"permissions": items})
+		writeJSON(w, http.StatusOK, listResponse("permissions", items))
 	}
 }
 func setRolePermission(users *system.UserService, grant bool) http.HandlerFunc {
@@ -68,12 +76,20 @@ func setRolePermission(users *system.UserService, grant bool) http.HandlerFunc {
 }
 func listRoleUsers(users *system.UserService) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		items, err := users.ListRoleUsers(r.Context(), r.PathValue("id"))
+		query, err := parseListQuery(r)
 		if err != nil {
+			writeListQueryError(w, err)
+			return
+		}
+		items, err := users.ListRoleUsers(r.Context(), r.PathValue("id"), query)
+		if err != nil {
+			if writeListQueryError(w, err) {
+				return
+			}
 			writeSystemError(w, err)
 			return
 		}
-		writeJSON(w, http.StatusOK, map[string]any{"users": items})
+		writeJSON(w, http.StatusOK, listResponse("users", items))
 	}
 }
 func setRoleUser(users *system.UserService, assign bool) http.HandlerFunc {

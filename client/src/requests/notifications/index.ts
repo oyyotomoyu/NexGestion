@@ -1,4 +1,5 @@
 import { request } from "@/requests/core/client";
+import { buildListPath, listItems, type ListQuery, type ListResponse } from "@/requests/core/list";
 import type {
   CreateNotificationInput,
   Notification,
@@ -102,15 +103,15 @@ function retainUntil(showUntil: string | null) {
   return date.toISOString();
 }
 
-export async function listNotificationTypes() {
+export async function listNotificationTypes(query: ListQuery = {}) {
   if (import.meta.env.DEV) return [...mockTypes];
-  const response = await request<{ notification_types: NotificationType[] }>(
-    "/api/notifications/types",
+  const response = await request<ListResponse<NotificationType, "notification_types">>(
+    buildListPath("/api/notifications/types", { sort: "severity", order: "asc", page_size: 100, ...query }),
   );
-  return response.notification_types;
+  return listItems(response, "notification_types");
 }
 
-export async function listNotifications() {
+export async function listNotifications(query: ListQuery = {}) {
   if (import.meta.env.DEV) {
     const now = Date.now();
     return mockNotifications.filter(
@@ -120,16 +121,18 @@ export async function listNotifications() {
         (!item.show_until || Date.parse(item.show_until) > now),
     );
   }
-  const response = await request<{ notifications: Notification[] }>("/api/notifications");
-  return response.notifications;
+  const response = await request<ListResponse<Notification, "notifications">>(
+    buildListPath("/api/notifications", { sort: "updated_at", order: "desc", page_size: 100, ...query }),
+  );
+  return listItems(response, "notifications");
 }
 
-export async function listAdminNotifications() {
+export async function listAdminNotifications(query: ListQuery = {}) {
   if (import.meta.env.DEV) return [...mockNotifications];
-  const response = await request<{ notifications: Notification[] }>(
-    "/api/notifications/admin",
+  const response = await request<ListResponse<Notification, "notifications">>(
+    buildListPath("/api/notifications/admin", { sort: "updated_at", order: "desc", page_size: 100, ...query }),
   );
-  return response.notifications;
+  return listItems(response, "notifications");
 }
 
 export async function createNotification(input: CreateNotificationInput) {

@@ -22,6 +22,17 @@ All report file APIs require `reports.manage`.
 
 The file path is always relative to `report/`. Absolute paths and parent-directory traversal are rejected.
 
+`GET /api/reports/files` follows the shared List API Query Standard in [`architecture.md`](./architecture.md). The response array property is `files`.
+
+Report-file list query definition:
+
+| Option | Definition |
+| --- | --- |
+| Keyword fields | `path`, `name` |
+| Sort fields | `path`, `name`, `size`, `modified_at` |
+| Default sort | `modified_at desc`, then `path asc` |
+| Extra filters | File extension, top-level folder |
+
 ## 3. UI Rule
 
 Only administrator users should see report file management. The UI should let an administrator:

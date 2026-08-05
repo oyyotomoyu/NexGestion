@@ -8,12 +8,20 @@ import (
 
 func listRoles(users *system.UserService) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		roles, err := users.ListRoles(r.Context())
+		query, err := parseListQuery(r)
 		if err != nil {
+			writeListQueryError(w, err)
+			return
+		}
+		roles, err := users.ListRoles(r.Context(), query)
+		if err != nil {
+			if writeListQueryError(w, err) {
+				return
+			}
 			writeSystemError(w, err)
 			return
 		}
-		writeJSON(w, http.StatusOK, map[string]any{"roles": roles})
+		writeJSON(w, http.StatusOK, listResponse("roles", roles))
 	}
 }
 

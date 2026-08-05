@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"errors"
+	"strings"
 	"time"
 )
 
@@ -45,26 +46,54 @@ func (s *UserService) EffectivePermissionKeys(ctx context.Context, userID string
 	return keys, rows.Err()
 }
 
-func (s *UserService) ListPermissions(ctx context.Context) ([]Permission, error) {
+func (s *UserService) ListPermissions(ctx context.Context, query ListQuery) (ListResult[Permission], error) {
+	query, sortExpression, err := NormalizeListQuery(query, "permission_key", "asc", map[string]string{
+		"permission_key": "permission_key",
+		"module":         "module",
+	})
+	if err != nil {
+		return ListResult[Permission]{}, err
+	}
 	db, err := s.open()
 	if err != nil {
-		return nil, err
+		return ListResult[Permission]{}, err
 	}
 	defer db.Close()
-	rows, err := db.QueryContext(ctx, `SELECT id,permission_key,module,description FROM permissions ORDER BY permission_key`)
+	where := []string{"1=1"}
+	args := []any{}
+	if query.Keyword != "" {
+		pattern := "%" + query.Keyword + "%"
+		where = append(where, `(permission_key LIKE ? COLLATE NOCASE OR module LIKE ? COLLATE NOCASE OR description LIKE ? COLLATE NOCASE)`)
+		args = append(args, pattern, pattern, pattern)
+	}
+	if module := strings.TrimSpace(query.Filters["module"]); module != "" {
+		where = append(where, "module = ?")
+		args = append(args, module)
+	}
+	whereSQL := strings.Join(where, " AND ")
+	var total int
+	if err := db.QueryRowContext(ctx, `SELECT COUNT(*) FROM permissions WHERE `+whereSQL, args...).Scan(&total); err != nil {
+		return ListResult[Permission]{}, err
+	}
+	listArgs := append([]any{}, args...)
+	listArgs = append(listArgs, query.PageSize, ListOffset(query))
+	rows, err := db.QueryContext(ctx, `SELECT id,permission_key,module,description FROM permissions WHERE `+whereSQL+` ORDER BY `+sortExpression+` `+query.Order+`, id ASC LIMIT ? OFFSET ?`, listArgs...)
 	if err != nil {
-		return nil, err
+		return ListResult[Permission]{}, err
 	}
 	defer rows.Close()
 	result := []Permission{}
 	for rows.Next() {
 		var p Permission
 		if err := rows.Scan(&p.ID, &p.PermissionKey, &p.Module, &p.Description); err != nil {
-			return nil, err
+			return ListResult[Permission]{}, err
 		}
 		result = append(result, p)
 	}
-	return result, rows.Err()
+	if err := rows.Err(); err != nil {
+		return ListResult[Permission]{}, err
+	}
+	return NewListResult(result, query, total), nil
 }
 
 func getPermission(ctx context.Context, db *sql.DB, id string) (*Permission, error) {
@@ -107,25 +136,49 @@ func (s *UserService) SetRolePermission(ctx context.Context, actor, roleID, perm
 	return err
 }
 
-func (s *UserService) ListRoleUsers(ctx context.Context, roleID string) ([]User, error) {
+func (s *UserService) ListRoleUsers(ctx context.Context, roleID string, query ListQuery) (ListResult[User], error) {
+	query, sortExpression, err := NormalizeListQuery(query, "display_name", "asc", map[string]string{
+		"display_name": "u.display_name COLLATE NOCASE",
+		"email":        "u.email COLLATE NOCASE",
+		"created_at":   "u.created_at",
+		"assigned_at":  "ur.created_at",
+	})
+	if err != nil {
+		return ListResult[User]{}, err
+	}
 	db, err := s.open()
 	if err != nil {
-		return nil, err
+		return ListResult[User]{}, err
 	}
 	defer db.Close()
 	if _, err = getRole(ctx, db, roleID); err != nil {
-		return nil, err
+		return ListResult[User]{}, err
 	}
-	rows, err := db.QueryContext(ctx, `SELECT user_id FROM user_roles WHERE role_id=? ORDER BY user_id`, roleID)
+	where := []string{"ur.role_id = ?", "u.deleted_at IS NULL"}
+	args := []any{roleID}
+	if query.Keyword != "" {
+		pattern := "%" + query.Keyword + "%"
+		where = append(where, `(u.display_name LIKE ? COLLATE NOCASE OR u.email LIKE ? COLLATE NOCASE OR ep.employee_number LIKE ? COLLATE NOCASE)`)
+		args = append(args, pattern, pattern, pattern)
+	}
+	whereSQL := strings.Join(where, " AND ")
+	var total int
+	if err := db.QueryRowContext(ctx, `SELECT COUNT(*) FROM user_roles ur JOIN users u ON u.id = ur.user_id LEFT JOIN employee_profiles ep ON ep.user_id = u.id WHERE `+whereSQL, args...).Scan(&total); err != nil {
+		return ListResult[User]{}, err
+	}
+	listArgs := append([]any{}, args...)
+	listArgs = append(listArgs, query.PageSize, ListOffset(query))
+	rows, err := db.QueryContext(ctx, `SELECT u.id FROM user_roles ur JOIN users u ON u.id = ur.user_id LEFT JOIN employee_profiles ep ON ep.user_id = u.id
+		WHERE `+whereSQL+` ORDER BY `+sortExpression+` `+query.Order+`, u.id ASC LIMIT ? OFFSET ?`, listArgs...)
 	if err != nil {
-		return nil, err
+		return ListResult[User]{}, err
 	}
 	var ids []string
 	for rows.Next() {
 		var id string
 		if err := rows.Scan(&id); err != nil {
 			rows.Close()
-			return nil, err
+			return ListResult[User]{}, err
 		}
 		ids = append(ids, id)
 	}
@@ -134,11 +187,11 @@ func (s *UserService) ListRoleUsers(ctx context.Context, roleID string) ([]User,
 	for _, id := range ids {
 		u, err := getUser(ctx, db, id)
 		if err != nil {
-			return nil, err
+			return ListResult[User]{}, err
 		}
 		result = append(result, *u)
 	}
-	return result, nil
+	return NewListResult(result, query, total), nil
 }
 
 func (s *UserService) SetRoleUser(ctx context.Context, actor, roleID, userID string, assign bool) error {

@@ -1,4 +1,5 @@
 import { request } from "@/requests/core/client";
+import { buildListPath, listItems, type ListQuery, type ListResponse } from "@/requests/core/list";
 import type {
   ApplyLeaveInput,
   AttendanceDay,
@@ -133,15 +134,15 @@ export async function signOutAttendance() {
   return request<AttendanceDay>("/api/attendance/today/sign-out", { method: "POST" });
 }
 
-export async function listAttendanceDays(month: string) {
+export async function listAttendanceDays(month: string, query: ListQuery = {}) {
   if (import.meta.env.DEV) {
     const day = await getMockToday();
     return day.attendance_date.startsWith(month) ? [day] : [];
   }
-  const response = await request<{ days: AttendanceDay[] }>(
-    `/api/attendance/days?month=${encodeURIComponent(month)}`,
+  const response = await request<ListResponse<AttendanceDay, "days">>(
+    buildListPath("/api/attendance/days", { month, sort: "attendance_date", order: "desc", page_size: 100, ...query }),
   );
-  return response.days;
+  return listItems(response, "days");
 }
 
 export async function getSelfAttendanceMonthlyReport(month: string) {
@@ -195,12 +196,12 @@ export async function getLeaveTypes() {
   return response.leave_types;
 }
 
-export async function listLeaveRequests() {
+export async function listLeaveRequests(query: ListQuery = {}) {
   if (import.meta.env.DEV) return [...mockLeaveRequests];
-  const response = await request<{ leave_requests: LeaveRequest[] }>(
-    "/api/attendance/leave-requests",
+  const response = await request<ListResponse<LeaveRequest, "leave_requests">>(
+    buildListPath("/api/attendance/leave-requests", { sort: "created_at", order: "desc", page_size: 100, ...query }),
   );
-  return response.leave_requests;
+  return listItems(response, "leave_requests");
 }
 
 export async function applyLeave(input: ApplyLeaveInput) {
@@ -237,12 +238,12 @@ export async function applyLeave(input: ApplyLeaveInput) {
   });
 }
 
-export async function listLeaveApprovals() {
+export async function listLeaveApprovals(query: ListQuery = {}) {
   if (import.meta.env.DEV) return [...mockLeaveApprovals];
-  const response = await request<{ leave_requests: LeaveApprovalRequest[] }>(
-    "/api/attendance/leave-approvals",
+  const response = await request<ListResponse<LeaveApprovalRequest, "leave_requests">>(
+    buildListPath("/api/attendance/leave-approvals", { sort: "created_at", order: "desc", page_size: 100, ...query }),
   );
-  return response.leave_requests;
+  return listItems(response, "leave_requests");
 }
 
 export async function decideLeave(id: string, input: DecideLeaveInput) {

@@ -66,37 +66,76 @@ type UpdateGroupInput struct {
 	Status            *string `json:"status"`
 }
 
-func (s *UserService) ListGroups(ctx context.Context) ([]Group, error) {
+func (s *UserService) ListGroups(ctx context.Context, query ListQuery) (ListResult[Group], error) {
+	query, sortExpression, err := NormalizeListQuery(query, "name", "asc", map[string]string{
+		"name":               "g.name COLLATE NOCASE",
+		"type":               "g.type",
+		"organization_level": "g.organization_level",
+		"status":             "g.status",
+		"member_count":       "member_count",
+		"created_at":         "g.created_at",
+		"updated_at":         "g.updated_at",
+	})
+	if err != nil {
+		return ListResult[Group]{}, err
+	}
 	db, err := s.open()
 	if err != nil {
-		return nil, err
+		return ListResult[Group]{}, err
 	}
 	defer db.Close()
-	rows, err := db.QueryContext(ctx, `SELECT id FROM groups ORDER BY name COLLATE NOCASE, id`)
+	where := []string{"1=1"}
+	args := []any{}
+	if query.Keyword != "" {
+		pattern := "%" + query.Keyword + "%"
+		where = append(where, `(g.name LIKE ? COLLATE NOCASE OR EXISTS (
+			SELECT 1 FROM group_roles gr JOIN roles r ON r.id = gr.role_id
+			WHERE gr.group_id = g.id AND r.name LIKE ? COLLATE NOCASE
+		))`)
+		args = append(args, pattern, pattern)
+	}
+	for _, filter := range []string{"type", "status", "parent_group_id", "organization_level"} {
+		if value := strings.TrimSpace(query.Filters[filter]); value != "" {
+			where = append(where, "g."+filter+" = ?")
+			args = append(args, value)
+		}
+	}
+	whereSQL := strings.Join(where, " AND ")
+	base := `FROM groups g
+		LEFT JOIN (SELECT group_id, COUNT(*) member_count FROM user_groups WHERE left_at IS NULL GROUP BY group_id) mc ON mc.group_id = g.id`
+	var total int
+	if err := db.QueryRowContext(ctx, `SELECT COUNT(*) `+base+` WHERE `+whereSQL, args...).Scan(&total); err != nil {
+		return ListResult[Group]{}, err
+	}
+	listArgs := append([]any{}, args...)
+	listArgs = append(listArgs, query.PageSize, ListOffset(query))
+	rows, err := db.QueryContext(ctx, `SELECT g.id, COALESCE(mc.member_count,0) member_count `+base+`
+		WHERE `+whereSQL+` ORDER BY `+sortExpression+` `+query.Order+`, g.id ASC LIMIT ? OFFSET ?`, listArgs...)
 	if err != nil {
-		return nil, err
+		return ListResult[Group]{}, err
 	}
 	var ids []string
 	for rows.Next() {
 		var id string
-		if err := rows.Scan(&id); err != nil {
+		var memberCount int
+		if err := rows.Scan(&id, &memberCount); err != nil {
 			rows.Close()
-			return nil, err
+			return ListResult[Group]{}, err
 		}
 		ids = append(ids, id)
 	}
 	if err := rows.Close(); err != nil {
-		return nil, err
+		return ListResult[Group]{}, err
 	}
 	result := make([]Group, 0, len(ids))
 	for _, id := range ids {
 		group, err := getGroup(ctx, db, id)
 		if err != nil {
-			return nil, err
+			return ListResult[Group]{}, err
 		}
 		result = append(result, *group)
 	}
-	return result, nil
+	return NewListResult(result, query, total), nil
 }
 
 func (s *UserService) GetGroup(ctx context.Context, id string) (*Group, error) {
@@ -315,33 +354,71 @@ func (s *UserService) DeleteGroup(ctx context.Context, actorUserID, id string) e
 	return tx.Commit()
 }
 
-func (s *UserService) ListGroupMembers(ctx context.Context, actorUserID, groupID string) ([]GroupMember, error) {
+func (s *UserService) ListGroupMembers(ctx context.Context, actorUserID, groupID string, query ListQuery) (ListResult[GroupMember], error) {
+	query, sortExpression, err := NormalizeListQuery(query, "display_name", "asc", map[string]string{
+		"display_name": "u.display_name COLLATE NOCASE",
+		"email":        "u.email COLLATE NOCASE",
+		"role":         "gr.kind",
+		"title":        "ug.title COLLATE NOCASE",
+		"joined_at":    "ug.joined_at",
+	})
+	if err != nil {
+		return ListResult[GroupMember]{}, err
+	}
 	db, err := s.open()
 	if err != nil {
-		return nil, err
+		return ListResult[GroupMember]{}, err
 	}
 	defer db.Close()
 	if _, err := getGroup(ctx, db, groupID); err != nil {
-		return nil, err
+		return ListResult[GroupMember]{}, err
 	}
+	where := []string{"ug.group_id=?", "ug.left_at IS NULL"}
+	args := []any{groupID}
+	if query.Keyword != "" {
+		pattern := "%" + query.Keyword + "%"
+		where = append(where, `(u.display_name LIKE ? COLLATE NOCASE OR u.email LIKE ? COLLATE NOCASE OR ug.title LIKE ? COLLATE NOCASE)`)
+		args = append(args, pattern, pattern, pattern)
+	}
+	if role := strings.TrimSpace(query.Filters["role"]); role != "" {
+		where = append(where, "gr.kind = ?")
+		args = append(args, role)
+	}
+	if primary := strings.TrimSpace(query.Filters["is_primary_organization"]); primary != "" {
+		where = append(where, "ug.is_primary_organization = ?")
+		args = append(args, boolFilter(primary))
+	}
+	whereSQL := strings.Join(where, " AND ")
+	base := `FROM user_groups ug JOIN users u ON u.id=ug.user_id
+		JOIN group_roles gr ON gr.group_id=ug.group_id
+		JOIN user_roles ur ON ur.user_id=u.id AND ur.role_id=gr.role_id`
+	var total int
+	if err := db.QueryRowContext(ctx, `SELECT COUNT(*) `+base+` WHERE `+whereSQL, args...).Scan(&total); err != nil {
+		return ListResult[GroupMember]{}, err
+	}
+	listArgs := append([]any{}, args...)
+	listArgs = append(listArgs, query.PageSize, ListOffset(query))
 	rows, err := db.QueryContext(ctx, `SELECT u.id, u.display_name, u.email, gr.kind, ug.title, ug.joined_at,ug.is_primary_organization
 		FROM user_groups ug JOIN users u ON u.id=ug.user_id
 		JOIN group_roles gr ON gr.group_id=ug.group_id
 		JOIN user_roles ur ON ur.user_id=u.id AND ur.role_id=gr.role_id
-		WHERE ug.group_id=? AND ug.left_at IS NULL ORDER BY u.display_name COLLATE NOCASE`, groupID)
+		WHERE `+whereSQL+` ORDER BY `+sortExpression+` `+query.Order+`, u.id ASC LIMIT ? OFFSET ?`, listArgs...)
 	if err != nil {
-		return nil, err
+		return ListResult[GroupMember]{}, err
 	}
 	defer rows.Close()
 	result := []GroupMember{}
 	for rows.Next() {
 		var m GroupMember
 		if err := rows.Scan(&m.UserID, &m.DisplayName, &m.Email, &m.Role, &m.Title, &m.JoinedAt, &m.IsPrimaryOrganization); err != nil {
-			return nil, err
+			return ListResult[GroupMember]{}, err
 		}
 		result = append(result, m)
 	}
-	return result, rows.Err()
+	if err := rows.Err(); err != nil {
+		return ListResult[GroupMember]{}, err
+	}
+	return NewListResult(result, query, total), nil
 }
 
 func (s *UserService) SetGroupMember(ctx context.Context, actorUserID, groupID, userID string, input SetGroupMemberInput) (*GroupMember, error) {

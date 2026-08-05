@@ -10,34 +10,58 @@ import (
 
 func listNotificationTypes(notifications *system.NotificationService) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		types, err := notifications.ListTypes(r.Context())
+		query, err := parseListQuery(r)
 		if err != nil {
+			writeListQueryError(w, err)
+			return
+		}
+		types, err := notifications.ListTypes(r.Context(), query)
+		if err != nil {
+			if writeListQueryError(w, err) {
+				return
+			}
 			writeNotificationError(w, err)
 			return
 		}
-		writeJSON(w, http.StatusOK, map[string]any{"notification_types": types})
+		writeJSON(w, http.StatusOK, listResponse("notification_types", types))
 	}
 }
 
 func listMyNotifications(notifications *system.NotificationService) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		items, err := notifications.ListForUser(r.Context(), authenticatedUserID(r))
+		query, err := parseListQuery(r)
 		if err != nil {
+			writeListQueryError(w, err)
+			return
+		}
+		items, err := notifications.ListForUser(r.Context(), authenticatedUserID(r), query)
+		if err != nil {
+			if writeListQueryError(w, err) {
+				return
+			}
 			writeNotificationError(w, err)
 			return
 		}
-		writeJSON(w, http.StatusOK, map[string]any{"notifications": items})
+		writeJSON(w, http.StatusOK, listResponse("notifications", items))
 	}
 }
 
 func listAdminNotifications(notifications *system.NotificationService) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		items, err := notifications.ListAll(r.Context())
+		query, err := parseListQuery(r)
 		if err != nil {
+			writeListQueryError(w, err)
+			return
+		}
+		items, err := notifications.ListAll(r.Context(), query)
+		if err != nil {
+			if writeListQueryError(w, err) {
+				return
+			}
 			writeNotificationError(w, err)
 			return
 		}
-		writeJSON(w, http.StatusOK, map[string]any{"notifications": items})
+		writeJSON(w, http.StatusOK, listResponse("notifications", items))
 	}
 }
 

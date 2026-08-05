@@ -143,6 +143,17 @@ The refresh token is returned through `Set-Cookie`, not in the JSON body.
 
 New APIs must be placed in the protected router group by default. Every public endpoint must be registered explicitly.
 
+`GET /api/users` follows the shared List API Query Standard in [`architecture.md`](./architecture.md). The response array property is `users`.
+
+List query definition:
+
+| Option | Definition |
+| --- | --- |
+| Keyword fields | `display_name`, `email`, employee number, employee legal/preferred name |
+| Sort fields | `display_name`, `email`, `status`, `created_at`, `updated_at`, `last_login_at` |
+| Default sort | `created_at desc`, then `id asc` |
+| Extra filters | `status`, `role_id`, `group_id`, `deleted` when a future admin UI needs archived accounts |
+
 ## 5. Session Storage
 
 Add `sessions` to `user.db`:

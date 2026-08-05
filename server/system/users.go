@@ -119,7 +119,78 @@ func (s *UserService) open() (*sql.DB, error) {
 	return db, nil
 }
 
-func (s *UserService) List(ctx context.Context) ([]User, error) {
+func (s *UserService) List(ctx context.Context, query ListQuery) (ListResult[User], error) {
+	query, sortExpression, err := NormalizeListQuery(query, "created_at", "desc", map[string]string{
+		"display_name":  "u.display_name COLLATE NOCASE",
+		"email":         "u.email COLLATE NOCASE",
+		"status":        "u.status",
+		"created_at":    "u.created_at",
+		"updated_at":    "u.updated_at",
+		"last_login_at": "u.last_login_at",
+	})
+	if err != nil {
+		return ListResult[User]{}, err
+	}
+	db, err := s.open()
+	if err != nil {
+		return ListResult[User]{}, err
+	}
+	defer db.Close()
+	where := []string{"u.deleted_at IS NULL"}
+	args := []any{}
+	if query.Keyword != "" {
+		pattern := "%" + query.Keyword + "%"
+		where = append(where, `(u.display_name LIKE ? COLLATE NOCASE OR u.email LIKE ? COLLATE NOCASE OR ep.employee_number LIKE ? COLLATE NOCASE OR ep.legal_name LIKE ? COLLATE NOCASE OR ep.preferred_name LIKE ? COLLATE NOCASE)`)
+		args = append(args, pattern, pattern, pattern, pattern, pattern)
+	}
+	if status := strings.TrimSpace(query.Filters["status"]); status != "" {
+		where = append(where, "u.status = ?")
+		args = append(args, status)
+	}
+	if roleID := strings.TrimSpace(query.Filters["role_id"]); roleID != "" {
+		where = append(where, "EXISTS (SELECT 1 FROM user_roles ur WHERE ur.user_id = u.id AND ur.role_id = ?)")
+		args = append(args, roleID)
+	}
+	if groupID := strings.TrimSpace(query.Filters["group_id"]); groupID != "" {
+		where = append(where, "EXISTS (SELECT 1 FROM user_groups ug WHERE ug.user_id = u.id AND ug.group_id = ? AND ug.left_at IS NULL)")
+		args = append(args, groupID)
+	}
+	whereSQL := strings.Join(where, " AND ")
+	var total int
+	if err := db.QueryRowContext(ctx, `SELECT COUNT(*) FROM users u LEFT JOIN employee_profiles ep ON ep.user_id = u.id WHERE `+whereSQL, args...).Scan(&total); err != nil {
+		return ListResult[User]{}, err
+	}
+	listArgs := append([]any{}, args...)
+	listArgs = append(listArgs, query.PageSize, ListOffset(query))
+	rows, err := db.QueryContext(ctx, `SELECT u.id FROM users u LEFT JOIN employee_profiles ep ON ep.user_id = u.id
+		WHERE `+whereSQL+` ORDER BY `+sortExpression+` `+query.Order+`, u.id ASC LIMIT ? OFFSET ?`, listArgs...)
+	if err != nil {
+		return ListResult[User]{}, err
+	}
+	var ids []string
+	for rows.Next() {
+		var id string
+		if err := rows.Scan(&id); err != nil {
+			rows.Close()
+			return ListResult[User]{}, err
+		}
+		ids = append(ids, id)
+	}
+	if err := rows.Close(); err != nil {
+		return ListResult[User]{}, err
+	}
+	users := make([]User, 0, len(ids))
+	for _, id := range ids {
+		user, err := getUser(ctx, db, id)
+		if err != nil {
+			return ListResult[User]{}, err
+		}
+		users = append(users, *user)
+	}
+	return NewListResult(users, query, total), nil
+}
+
+func (s *UserService) ListAll(ctx context.Context) ([]User, error) {
 	db, err := s.open()
 	if err != nil {
 		return nil, err

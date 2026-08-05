@@ -15,12 +15,20 @@ const maxJSONBodySize = 1 << 20
 
 func listUsers(users *system.UserService) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		result, err := users.List(r.Context())
+		query, err := parseListQuery(r)
 		if err != nil {
+			writeListQueryError(w, err)
+			return
+		}
+		result, err := users.List(r.Context(), query)
+		if err != nil {
+			if writeListQueryError(w, err) {
+				return
+			}
 			writeSystemError(w, err)
 			return
 		}
-		writeJSON(w, http.StatusOK, map[string]any{"users": result})
+		writeJSON(w, http.StatusOK, listResponse("users", result))
 	}
 }
 

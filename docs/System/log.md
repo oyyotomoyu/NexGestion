@@ -165,6 +165,11 @@ This API must use Authentication Middleware. The first phase requires authentica
 | `status` | No | `info`, `warning`, or `error`; a comma-separated list may select multiple statuses |
 | `limit` | No | Number of records to return; default 100, maximum 1000 |
 | `cursor` | No | Pagination cursor that prevents loading an entire week at once |
+| `page` | No | One-based page number for UI pagination; default `1` when `cursor` is not supplied |
+| `page_size` | No | Number of records per page for UI pagination; default `20`, maximum `100` when `cursor` is not supplied |
+| `keyword` | No | Case-insensitive search against log content, user id, and IP address |
+| `sort` | No | `timestamp` or `status`; default `timestamp` |
+| `order` | No | `asc` or `desc`; default `desc` |
 
 Example:
 
@@ -193,6 +198,8 @@ When no time is supplied, the query defaults to the last 24 hours. The permitted
 ```
 
 Results are ordered from newest to oldest by default. `next_cursor` is an empty string when there is no next page.
+
+For UI screens, `GET /api/logs` follows the shared List API Query Standard in [`architecture.md`](./architecture.md) and returns the array property `logs`. Cursor pagination remains available for log streaming or export-like reads. A request must use either cursor pagination or page pagination, not both.
 
 ### 8.4 Validation and Errors
 

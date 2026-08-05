@@ -1,4 +1,5 @@
 import { request } from "@/requests/core/client";
+import { buildListPath, listItems, type ListQuery, type ListResponse } from "@/requests/core/list";
 import type { CreateUserInput, UpdateUserInput, User } from "./types";
 
 export type { CreateUserInput, UpdateUserInput, User } from "./types";
@@ -487,13 +488,15 @@ let mockUsers: User[] = [
   },
 ];
 
-export async function listUsers() {
+export async function listUsers(query: ListQuery = {}) {
   if (import.meta.env.DEV) {
     return mockUsers;
   }
 
-  const response = await request<{ users: User[] }>("/api/users");
-  return response.users;
+  const response = await request<ListResponse<User, "users">>(
+    buildListPath("/api/users", { sort: "display_name", order: "asc", page_size: 100, ...query }),
+  );
+  return listItems(response, "users");
 }
 
 export function getUser(id: string) {

@@ -100,6 +100,8 @@ Role APIs:
 | `PATCH` | `/api/roles/{id}` | `roles.manage` | Edit a custom role |
 | `DELETE` | `/api/roles/{id}` | `roles.manage` | Delete a custom role and its assignments |
 
+Every UserSystem API that returns a list follows the shared List API Query Standard in [`architecture.md`](./architecture.md). This includes users, roles, role users, permissions, groups, and group members. Each focused subsystem document defines its allowed keyword and sort fields.
+
 The protected administrator passes every permission check. Role list and detail responses include the role's assigned permission definitions. `POST` and `PATCH` accept role metadata; only the protected initial administrator may change a role's permission grants. Delegated role managers retain read access to the permissions assigned to roles.
 
 Example create request:

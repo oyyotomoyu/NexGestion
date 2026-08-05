@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"io"
 	"path/filepath"
+	"sort"
 	"strings"
 	"time"
 
@@ -110,16 +111,47 @@ func (s *NotificationService) open() (*sql.DB, error) {
 	return db, nil
 }
 
-func (s *NotificationService) ListTypes(ctx context.Context) ([]NotificationType, error) {
+func (s *NotificationService) ListTypes(ctx context.Context, query ListQuery) (ListResult[NotificationType], error) {
+	query, _, err := NormalizeListQuery(query, "severity", "asc", map[string]string{
+		"severity":  "severity",
+		"code":      "code",
+		"name":      "name",
+		"is_active": "is_active",
+	})
+	if err != nil {
+		return ListResult[NotificationType]{}, err
+	}
 	db, err := s.open()
 	if err != nil {
-		return nil, err
+		return ListResult[NotificationType]{}, err
 	}
 	defer db.Close()
+	where := []string{"1=1"}
+	args := []any{}
+	if query.Keyword != "" {
+		pattern := "%" + query.Keyword + "%"
+		where = append(where, `(code LIKE ? COLLATE NOCASE OR name LIKE ? COLLATE NOCASE OR description LIKE ? COLLATE NOCASE OR required_permission_key LIKE ? COLLATE NOCASE)`)
+		args = append(args, pattern, pattern, pattern, pattern)
+	}
+	if value := strings.TrimSpace(query.Filters["is_active"]); value != "" {
+		where = append(where, "is_active = ?")
+		args = append(args, boolFilter(value))
+	}
+	if value := strings.TrimSpace(query.Filters["required_permission_key"]); value != "" {
+		where = append(where, "required_permission_key = ?")
+		args = append(args, value)
+	}
+	whereSQL := strings.Join(where, " AND ")
+	var total int
+	if err := db.QueryRowContext(ctx, `SELECT COUNT(*) FROM notification_types WHERE `+whereSQL, args...).Scan(&total); err != nil {
+		return ListResult[NotificationType]{}, err
+	}
+	listArgs := append([]any{}, args...)
+	listArgs = append(listArgs, query.PageSize, ListOffset(query))
 	rows, err := db.QueryContext(ctx, `SELECT id,code,name,description,severity,required_permission_key,is_active
-		FROM notification_types ORDER BY severity, code`)
+		FROM notification_types WHERE `+whereSQL+` ORDER BY `+map[string]string{"severity": "severity", "code": "code", "name": "name", "is_active": "is_active"}[query.Sort]+` `+query.Order+`, id ASC LIMIT ? OFFSET ?`, listArgs...)
 	if err != nil {
-		return nil, err
+		return ListResult[NotificationType]{}, err
 	}
 	defer rows.Close()
 	var types []NotificationType
@@ -127,12 +159,15 @@ func (s *NotificationService) ListTypes(ctx context.Context) ([]NotificationType
 		var item NotificationType
 		var active int
 		if err := rows.Scan(&item.ID, &item.Code, &item.Name, &item.Description, &item.Severity, &item.RequiredPermissionKey, &active); err != nil {
-			return nil, err
+			return ListResult[NotificationType]{}, err
 		}
 		item.IsActive = active == 1
 		types = append(types, item)
 	}
-	return types, rows.Err()
+	if err := rows.Err(); err != nil {
+		return ListResult[NotificationType]{}, err
+	}
+	return NewListResult(types, query, total), nil
 }
 
 func (s *NotificationService) Create(ctx context.Context, senderUserID string, input CreateNotificationInput) (*Notification, error) {
@@ -305,7 +340,22 @@ func (s *NotificationService) Get(ctx context.Context, id string) (*Notification
 	return item, tx.Commit()
 }
 
-func (s *NotificationService) ListForUser(ctx context.Context, userID string) ([]Notification, error) {
+func (s *NotificationService) ListForUser(ctx context.Context, userID string, query ListQuery) (ListResult[Notification], error) {
+	query, err := normalizeNotificationListQuery(query)
+	if err != nil {
+		return ListResult[Notification]{}, err
+	}
+	items, err := s.listForUserAll(ctx, userID)
+	if err != nil {
+		return ListResult[Notification]{}, err
+	}
+	items = filterSortNotifications(items, query)
+	total := len(items)
+	items = pageNotifications(items, query)
+	return NewListResult(items, query, total), nil
+}
+
+func (s *NotificationService) listForUserAll(ctx context.Context, userID string) ([]Notification, error) {
 	db, err := s.open()
 	if err != nil {
 		return nil, err
@@ -366,37 +416,139 @@ func (s *NotificationService) ListForUser(ctx context.Context, userID string) ([
 	return items, nil
 }
 
-func (s *NotificationService) ListAll(ctx context.Context) ([]Notification, error) {
+func (s *NotificationService) ListAll(ctx context.Context, query ListQuery) (ListResult[Notification], error) {
+	query, err := normalizeNotificationListQuery(query)
+	if err != nil {
+		return ListResult[Notification]{}, err
+	}
 	db, err := s.open()
 	if err != nil {
-		return nil, err
+		return ListResult[Notification]{}, err
 	}
 	defer db.Close()
 	rows, err := db.QueryContext(ctx, `SELECT id FROM notifications ORDER BY created_at DESC, id`)
 	if err != nil {
-		return nil, err
+		return ListResult[Notification]{}, err
 	}
 	ids := []string{}
 	for rows.Next() {
 		var id string
 		if err := rows.Scan(&id); err != nil {
 			rows.Close()
-			return nil, err
+			return ListResult[Notification]{}, err
 		}
 		ids = append(ids, id)
 	}
 	if err := rows.Close(); err != nil {
-		return nil, err
+		return ListResult[Notification]{}, err
 	}
 	items := make([]Notification, 0, len(ids))
 	for _, id := range ids {
 		item, err := s.Get(ctx, id)
 		if err != nil {
-			return nil, err
+			return ListResult[Notification]{}, err
 		}
 		items = append(items, *item)
 	}
-	return items, nil
+	items = filterSortNotifications(items, query)
+	total := len(items)
+	items = pageNotifications(items, query)
+	return NewListResult(items, query, total), nil
+}
+
+func normalizeNotificationListQuery(query ListQuery) (ListQuery, error) {
+	query, _, err := NormalizeListQuery(query, "updated_at", "desc", map[string]string{
+		"created_at": "created_at",
+		"updated_at": "updated_at",
+		"show_from":  "show_from",
+		"show_until": "show_until",
+		"status":     "status",
+		"type":       "type",
+		"title":      "title",
+	})
+	return query, err
+}
+
+func filterSortNotifications(items []Notification, query ListQuery) []Notification {
+	filtered := make([]Notification, 0, len(items))
+	for _, item := range items {
+		if query.Keyword != "" {
+			keyword := strings.ToLower(query.Keyword)
+			if !strings.Contains(strings.ToLower(item.Title), keyword) &&
+				!strings.Contains(strings.ToLower(item.Message), keyword) &&
+				!strings.Contains(strings.ToLower(item.Type.Code), keyword) {
+				continue
+			}
+		}
+		if value := strings.TrimSpace(query.Filters["status"]); value != "" && item.Status != value {
+			continue
+		}
+		if value := strings.TrimSpace(query.Filters["type"]); value != "" && item.Type.Code != value {
+			continue
+		}
+		if value := strings.TrimSpace(query.Filters["sender_user_id"]); value != "" && item.SenderUserID != value {
+			continue
+		}
+		if value := strings.TrimSpace(query.Filters["audience_scope"]); value != "" && !notificationHasAudienceScope(item, value) {
+			continue
+		}
+		filtered = append(filtered, item)
+	}
+	sort.SliceStable(filtered, func(i, j int) bool {
+		less := notificationLess(filtered[i], filtered[j], query.Sort)
+		if query.Order == "desc" {
+			return !less && filtered[i].ID != filtered[j].ID
+		}
+		return less
+	})
+	return filtered
+}
+
+func notificationLess(a, b Notification, field string) bool {
+	switch field {
+	case "created_at":
+		return a.CreatedAt < b.CreatedAt || (a.CreatedAt == b.CreatedAt && a.ID < b.ID)
+	case "show_from":
+		return a.ShowFrom < b.ShowFrom || (a.ShowFrom == b.ShowFrom && a.ID < b.ID)
+	case "show_until":
+		return optionalString(a.ShowUntil) < optionalString(b.ShowUntil) || (optionalString(a.ShowUntil) == optionalString(b.ShowUntil) && a.ID < b.ID)
+	case "status":
+		return a.Status < b.Status || (a.Status == b.Status && a.ID < b.ID)
+	case "type":
+		return a.Type.Code < b.Type.Code || (a.Type.Code == b.Type.Code && a.ID < b.ID)
+	case "title":
+		return strings.ToLower(a.Title) < strings.ToLower(b.Title) || (strings.EqualFold(a.Title, b.Title) && a.ID < b.ID)
+	default:
+		return a.UpdatedAt < b.UpdatedAt || (a.UpdatedAt == b.UpdatedAt && a.ID < b.ID)
+	}
+}
+
+func pageNotifications(items []Notification, query ListQuery) []Notification {
+	start := ListOffset(query)
+	if start >= len(items) {
+		return []Notification{}
+	}
+	end := start + query.PageSize
+	if end > len(items) {
+		end = len(items)
+	}
+	return items[start:end]
+}
+
+func notificationHasAudienceScope(item Notification, scope string) bool {
+	for _, audience := range item.Audiences {
+		if audience.Scope == scope {
+			return true
+		}
+	}
+	return false
+}
+
+func optionalString(value *string) string {
+	if value == nil {
+		return ""
+	}
+	return *value
 }
 
 func (s *NotificationService) ExpireAndCleanup(ctx context.Context) error {

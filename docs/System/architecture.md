@@ -136,6 +136,55 @@ POST   /api/orders
 
 The exact API contract should be documented before implementation starts.
 
+### 6.1 List API Query Standard
+
+Any API function that reads more than one record from the database must support server-side paging, keyword filtering, and sorting. The UI must not be required to load every row and sort or filter it in the browser.
+
+This standard applies to list endpoints such as users, roles, role users, permissions, groups, group members, attendance days, attendance reports, leave requests, notification lists, logs, and report files. It does not apply to single-record reads, mutations, health checks, token operations, or binary file downloads.
+
+Common query parameters:
+
+| Parameter | Required | Default | Description |
+| --- | --- | --- | --- |
+| `page` | No | `1` | One-based page number. Values below `1` are invalid. |
+| `page_size` | No | `20` | Number of records per page. Values below `1` are invalid. The default maximum is `100` unless a system document defines a stricter maximum. |
+| `keyword` | No | Empty | Trimmed case-insensitive search text. Empty keyword means no keyword filter. |
+| `sort` | No | Endpoint default | Stable field name selected from the endpoint's allowed sort fields. |
+| `order` | No | Endpoint default | `asc` or `desc`. |
+
+Every list endpoint must define:
+
+- the response array property, such as `users`, `roles`, or `groups`;
+- allowed `keyword` fields;
+- allowed `sort` fields;
+- default sort field and order; and
+- whether any extra filters are available.
+
+Invalid `page`, `page_size`, `sort`, or `order` values return `400 Bad Request`. Unknown keyword fields are not accepted because keyword searches are defined by each endpoint, not by client-supplied column names.
+
+List responses must include pagination metadata beside the result array:
+
+```json
+{
+  "users": [],
+  "pagination": {
+    "page": 1,
+    "page_size": 20,
+    "total": 0,
+    "total_pages": 0
+  },
+  "sort": {
+    "field": "created_at",
+    "order": "desc"
+  },
+  "keyword": ""
+}
+```
+
+Sorting must be deterministic. When multiple rows have the same requested sort value, the server must add a stable tie-breaker such as immutable `id`.
+
+Keyword matching must use indexed or bounded database queries where practical. For local SQLite implementations, `LIKE` with normalized case-insensitive fields is acceptable for early modules, but the query must still apply pagination before returning data to the client.
+
 ## 7. Data Layer
 
 NexGestion is local-first, so the data layer should be designed with offline availability and easy backup in mind.
