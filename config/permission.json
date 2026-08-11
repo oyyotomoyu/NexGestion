@@ -139,6 +139,21 @@
       "key": "reports.manage",
       "module": "reports",
       "description": "View, download, and delete generated report files"
+    },
+    {
+      "key": "templates.read",
+      "module": "templates",
+      "description": "View and download template files visible to the user"
+    },
+    {
+      "key": "templates.upload",
+      "module": "templates",
+      "description": "Upload new template files and set their visible roles and groups"
+    },
+    {
+      "key": "templates.manage",
+      "module": "templates",
+      "description": "View, download, and delete all template files regardless of visibility; manage storage settings"
     }
   ]
 }

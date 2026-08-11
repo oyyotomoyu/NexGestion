@@ -50,7 +50,11 @@ func main() {
 	if err := reports.EnsureRoot(); err != nil {
 		log.Fatalf("report directory initialization failed: %v", err)
 	}
-	apis.InitRouter(mux, users, attendance, notifications, reports, system.NewAuthService(users), logService)
+	templates := system.NewTemplateService(databaseDirectory, getTemplateDirectory(), users)
+	if err := templates.EnsureRoot(); err != nil {
+		log.Fatalf("template directory initialization failed: %v", err)
+	}
+	apis.InitRouter(mux, users, attendance, notifications, reports, templates, system.NewAuthService(users), logService)
 	go runAttendanceMaintenance(attendance, logService)
 	go runNotificationMaintenance(notifications, logService)
 	mux.Handle("/", spaHandler(distDir))
@@ -95,6 +99,14 @@ func getReportDirectory() string {
 	directory := strings.TrimSpace(os.Getenv("REPORT_DIR"))
 	if directory == "" {
 		return "report"
+	}
+	return directory
+}
+
+func getTemplateDirectory() string {
+	directory := strings.TrimSpace(os.Getenv("TEMPLATE_DIR"))
+	if directory == "" {
+		return "template"
 	}
 	return directory
 }

@@ -1,0 +1,233 @@
+.templates-page {
+  display: grid;
+  gap: 24px;
+  width: 100%;
+  max-width: 1280px;
+  margin: 0 auto;
+}
+
+.templates-page__header > div {
+  display: grid;
+  gap: 6px;
+}
+
+.templates-alert {
+  padding: 12px 16px;
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+  background: var(--color-surface);
+}
+
+.templates-storage,
+.templates-upload,
+.templates-list {
+  display: grid;
+  gap: 16px;
+  padding: 20px;
+  border: 1px solid var(--color-border);
+  border-radius: 12px;
+  background: var(--color-surface);
+}
+
+.templates-storage__bar {
+  height: 10px;
+  border-radius: 999px;
+  background: var(--color-surface-muted);
+  overflow: hidden;
+}
+
+.templates-storage__bar-fill {
+  height: 100%;
+  border-radius: 999px;
+  background: var(--color-primary);
+}
+
+.templates-metrics {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: 16px;
+  margin: 0;
+}
+
+.templates-metrics dt {
+  color: var(--color-muted);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.templates-metrics dd {
+  margin: 4px 0 0;
+  font-size: 18px;
+  font-weight: 600;
+}
+
+.template-upload-form {
+  display: grid;
+  gap: 16px;
+}
+
+.template-upload-form__file input[type="file"] {
+  width: 100%;
+  padding: 8px 0;
+}
+
+.template-upload-form__audiences {
+  display: grid;
+  gap: 10px;
+}
+
+.template-upload-form__audiences-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.template-audience-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+  padding: 10px;
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+  background: var(--color-surface-muted);
+}
+
+.template-upload-form .nex-button {
+  justify-self: start;
+}
+
+.templates-list__header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: end;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.template-table-wrap {
+  overflow-x: auto;
+  border: 1px solid var(--color-border);
+  border-radius: 12px;
+}
+
+.template-table {
+  width: 100%;
+  min-width: 880px;
+  border-collapse: collapse;
+}
+
+.template-table th,
+.template-table td {
+  padding: 14px 16px;
+  border-bottom: 1px solid var(--color-border);
+  text-align: left;
+  vertical-align: middle;
+}
+
+.template-table th {
+  background: var(--color-surface-muted);
+}
+
+.template-table tbody tr:last-child td {
+  border-bottom: 0;
+}
+
+.template-table tbody tr:hover {
+  background: var(--color-primary-soft);
+}
+
+.template-table__actions-heading,
+.template-table__actions-cell {
+  text-align: right;
+}
+
+.template-download {
+  text-decoration: none;
+}
+
+.template-audience-badges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.template-audience-badge {
+  display: inline-flex;
+  align-items: center;
+  min-height: 24px;
+  padding: 2px 9px;
+  border: 1px solid var(--color-border);
+  border-radius: 999px;
+  color: var(--color-secondary);
+  background: var(--color-secondary-soft);
+}
+
+@media (max-width: 720px) {
+  .templates-storage,
+  .templates-upload,
+  .templates-list {
+    padding: 16px;
+  }
+
+  .templates-list__header {
+    align-items: stretch;
+  }
+
+  .template-table-wrap {
+    overflow: visible;
+    border: 0;
+    border-radius: 0;
+    background: var(--color-background);
+  }
+
+  .template-table {
+    min-width: 0;
+  }
+
+  .template-table thead {
+    display: none;
+  }
+
+  .template-table,
+  .template-table tbody,
+  .template-table tr,
+  .template-table td {
+    display: block;
+    width: 100%;
+  }
+
+  .template-table tbody {
+    display: grid;
+    gap: 12px;
+  }
+
+  .template-table tr {
+    overflow: hidden;
+    border: 1px solid var(--color-border);
+    border-radius: 10px;
+    background: var(--color-surface);
+  }
+
+  .template-table td {
+    display: grid;
+    grid-template-columns: minmax(96px, 36%) minmax(0, 1fr);
+    gap: 12px;
+    padding: 12px 14px;
+    overflow-wrap: anywhere;
+    text-align: left;
+  }
+
+  .template-table td::before {
+    content: attr(data-label);
+    color: var(--color-muted);
+    font-size: 12px;
+    font-weight: 600;
+    line-height: 18px;
+  }
+
+  .template-table__actions-cell {
+    text-align: left;
+  }
+}

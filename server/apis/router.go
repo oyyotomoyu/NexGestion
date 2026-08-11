@@ -12,7 +12,7 @@ import (
 // API handlers belong in this package and may call the system package to
 // perform application operations. The router itself is only responsible for
 // directing requests to the correct handler.
-func InitRouter(router *http.ServeMux, users *system.UserService, attendance *system.AttendanceService, notifications *system.NotificationService, reports *system.ReportFileService, auth *system.AuthService, logService *applogs.Service) {
+func InitRouter(router *http.ServeMux, users *system.UserService, attendance *system.AttendanceService, notifications *system.NotificationService, reports *system.ReportFileService, templates *system.TemplateService, auth *system.AuthService, logService *applogs.Service) {
 	catalog, err := system.LoadPermissionCatalog()
 	if err != nil {
 		panic("load permission catalog: " + err.Error())
@@ -86,6 +86,11 @@ func InitRouter(router *http.ServeMux, users *system.UserService, attendance *sy
 	router.HandleFunc("GET /api/reports/files", protected("reports.manage", listReportFiles(reports)))
 	router.HandleFunc("GET /api/reports/files/{path...}", protected("reports.manage", downloadReportFile(reports)))
 	router.HandleFunc("DELETE /api/reports/files/{path...}", protected("reports.manage", deleteReportFile(reports)))
+	router.HandleFunc("GET /api/templates", protected("templates.read", listTemplates(templates)))
+	router.HandleFunc("POST /api/templates", protected("templates.upload", uploadTemplate(templates)))
+	router.HandleFunc("GET /api/templates/{id}/download", protected("templates.read", downloadTemplate(templates)))
+	router.HandleFunc("DELETE /api/templates/{id}", authenticated(deleteTemplate(templates)))
+	router.HandleFunc("GET /api/templates/storage", protected("templates.manage", templateStorageUsage(templates)))
 
 	// Keep unknown API paths inside the API layer instead of falling through to
 	// the SPA handler.

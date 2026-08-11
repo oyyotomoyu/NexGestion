@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"mime/multipart"
 	"net/http"
 	"net/http/httptest"
 	"path/filepath"
@@ -28,12 +29,13 @@ func testRouter(t *testing.T) *http.ServeMux {
 	attendance := system.NewAttendanceService(directory, filepath.Join(reportDirectory, "attendance"), users)
 	notifications := system.NewNotificationService(directory, users)
 	reports := system.NewReportFileService(reportDirectory)
+	templates := system.NewTemplateService(directory, filepath.Join(t.TempDir(), "template"), users)
 	logService, err := applogs.NewService(t.TempDir(), time.UTC)
 	if err != nil {
 		t.Fatal(err)
 	}
 	t.Cleanup(logService.Close)
-	InitRouter(router, users, attendance, notifications, reports, system.NewAuthService(users), logService)
+	InitRouter(router, users, attendance, notifications, reports, templates, system.NewAuthService(users), logService)
 	return router
 }
 
@@ -890,6 +892,99 @@ func TestNotificationAPI(t *testing.T) {
 	if len(adminBody.Notifications) != 1 || adminBody.Notifications[0].Status != "hidden" {
 		t.Fatalf("admin list should include hidden notification, got %+v", adminBody.Notifications)
 	}
+}
+
+func TestTemplateAPI(t *testing.T) {
+	router := testRouter(t)
+	adminToken, _ := loginForTest(t, router)
+
+	uploadResponse := uploadTemplateForTest(t, router, adminToken, "membership-form.docx", []byte("template body"),
+		`[{"scope":"organization"}]`, "Membership form")
+	if uploadResponse.Code != http.StatusCreated {
+		t.Fatalf("upload template: %d %s", uploadResponse.Code, uploadResponse.Body.String())
+	}
+	var created system.TemplateFile
+	if err := json.NewDecoder(uploadResponse.Body).Decode(&created); err != nil {
+		t.Fatal(err)
+	}
+	if created.ID == "" || created.OriginalFilename != "membership-form.docx" || len(created.Audiences) != 1 {
+		t.Fatalf("unexpected created template: %+v", created)
+	}
+
+	listResponse := serveAuthorized(router, http.MethodGet, "/api/templates", nil, adminToken)
+	if listResponse.Code != http.StatusOK {
+		t.Fatalf("list templates: %d %s", listResponse.Code, listResponse.Body.String())
+	}
+	var listBody struct {
+		Templates []system.TemplateFile `json:"templates"`
+	}
+	if err := json.NewDecoder(listResponse.Body).Decode(&listBody); err != nil {
+		t.Fatal(err)
+	}
+	if len(listBody.Templates) != 1 || listBody.Templates[0].ID != created.ID {
+		t.Fatalf("expected uploaded template in list, got %+v", listBody.Templates)
+	}
+
+	downloadResponse := serveAuthorized(router, http.MethodGet, "/api/templates/"+created.ID+"/download", nil, adminToken)
+	if downloadResponse.Code != http.StatusOK {
+		t.Fatalf("download template: %d %s", downloadResponse.Code, downloadResponse.Body.String())
+	}
+	if downloadResponse.Body.String() != "template body" {
+		t.Fatalf("unexpected download body: %q", downloadResponse.Body.String())
+	}
+	if !strings.Contains(downloadResponse.Header().Get("Content-Disposition"), "membership-form.docx") {
+		t.Fatalf("unexpected content-disposition: %q", downloadResponse.Header().Get("Content-Disposition"))
+	}
+
+	usageResponse := serveAuthorized(router, http.MethodGet, "/api/templates/storage", nil, adminToken)
+	if usageResponse.Code != http.StatusOK {
+		t.Fatalf("template storage usage: %d %s", usageResponse.Code, usageResponse.Body.String())
+	}
+	var usage system.TemplateStorageUsage
+	if err := json.NewDecoder(usageResponse.Body).Decode(&usage); err != nil {
+		t.Fatal(err)
+	}
+	if usage.FileCount != 1 || usage.UsedBytes != int64(len("template body")) {
+		t.Fatalf("unexpected storage usage: %+v", usage)
+	}
+
+	deleteResponse := serveAuthorized(router, http.MethodDelete, "/api/templates/"+created.ID, nil, adminToken)
+	if deleteResponse.Code != http.StatusNoContent {
+		t.Fatalf("delete template: %d %s", deleteResponse.Code, deleteResponse.Body.String())
+	}
+
+	afterDelete := serveAuthorized(router, http.MethodGet, "/api/templates/"+created.ID+"/download", nil, adminToken)
+	if afterDelete.Code != http.StatusNotFound {
+		t.Fatalf("expected download after delete to 404, got %d", afterDelete.Code)
+	}
+}
+
+func uploadTemplateForTest(t *testing.T, router http.Handler, token, filename string, content []byte, audiencesJSON, description string) *httptest.ResponseRecorder {
+	t.Helper()
+	var body bytes.Buffer
+	writer := multipart.NewWriter(&body)
+	if err := writer.WriteField("audiences", audiencesJSON); err != nil {
+		t.Fatal(err)
+	}
+	if err := writer.WriteField("description", description); err != nil {
+		t.Fatal(err)
+	}
+	part, err := writer.CreateFormFile("file", filename)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := part.Write(content); err != nil {
+		t.Fatal(err)
+	}
+	if err := writer.Close(); err != nil {
+		t.Fatal(err)
+	}
+	request := httptest.NewRequest(http.MethodPost, "/api/templates", &body)
+	request.Header.Set("Content-Type", writer.FormDataContentType())
+	request.Header.Set("Authorization", "Bearer "+token)
+	response := httptest.NewRecorder()
+	router.ServeHTTP(response, request)
+	return response
 }
 
 func loginForTest(t *testing.T, router http.Handler) (string, *http.Cookie) {

@@ -7,6 +7,7 @@ import AttendanceApprovals from "@/views/AttendanceApprovals";
 import Dashboard from "@/views/Dashboard";
 import Login from "@/views/Login";
 import Notifications from "@/views/Notifications";
+import Templates from "@/views/Templates";
 import Settings from "@/views/Settings";
 import Roles from "@/views/Settings/Roles";
 import RoleDetail from "@/views/Settings/Roles/RoleDetail";
@@ -47,6 +48,10 @@ const routes: RouteObject[] = [
       {
         path: "notifications",
         element: <Notifications />,
+      },
+      {
+        path: "templates",
+        element: <Templates />,
       },
       {
         path: "settings",

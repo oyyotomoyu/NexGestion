@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strconv"
 
 	_ "modernc.org/sqlite"
 )
@@ -37,10 +38,28 @@ var RequiredDatabases = []DatabaseSpec{
 		Seed: []string{
 			`INSERT INTO system_settings (key, value) VALUES ('language', 'CHT')`,
 		},
+		SyncFunc: syncSystemSettingsDefaults,
 	},
 	userDatabaseSpec(),
 	attendanceDatabaseSpec(),
 	notificationDatabaseSpec(),
+	templateDatabaseSpec(),
+}
+
+// syncSystemSettingsDefaults inserts default settings that were added after a
+// database was first created, without overwriting values an administrator
+// already changed.
+func syncSystemSettingsDefaults(ctx context.Context, tx *sql.Tx) error {
+	defaults := map[string]string{
+		templateFileMaxBytesKey:    strconv.FormatInt(defaultTemplateFileMaxBytes, 10),
+		templateStorageMaxBytesKey: strconv.FormatInt(defaultTemplateStorageMaxBytes, 10),
+	}
+	for key, value := range defaults {
+		if _, err := tx.ExecContext(ctx, `INSERT OR IGNORE INTO system_settings (key, value) VALUES (?, ?)`, key, value); err != nil {
+			return fmt.Errorf("seed default setting %q: %w", key, err)
+		}
+	}
+	return nil
 }
 
 // EnsureRequiredDatabases creates and initializes every required database.
