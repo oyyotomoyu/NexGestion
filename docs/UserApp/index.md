@@ -14,6 +14,7 @@ If a `docs/System` file mentions frontend behavior, copy the user-facing part in
 - [Attendance](./attendance.md)
 - [Access Control](./access-control.md)
 - [Report Files](./report-files.md)
+- [Barcode Scanning](./barcode-scanning.md)
 
 ## Writing Rules
 

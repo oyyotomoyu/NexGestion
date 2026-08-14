@@ -16,7 +16,7 @@ The first architecture goal is to keep the system simple, modular, and easy to e
 - Keep business data available in local or self-hosted environments
 - Separate frontend UI concerns from backend business logic
 - Define clear API boundaries between `client` and `server`
-- Support future modules such as customers, inventory, sales, invoicing, and reporting
+- Support future modules such as customers, inventory, sales, checkout/point-of-sale, invoicing, and reporting
 - Keep the early codebase easy to understand for future contributors
 
 ## 3. Repository Structure
@@ -68,7 +68,7 @@ Planned frontend structure:
 - `src/store`: Client-side state management
 - `src/theme`: Design tokens, theme settings, and shared styles
 - `src/locales`: Translation files for future multilingual support
-- `src/layouts`: Shared application shells, sidebar, header, and auth layouts
+- `src/layouts`: Shared application shells, sidebar, header, and auth layouts. Time-sensitive, single-purpose flows (e.g. Checkout, see `docs/System/checkout-system.md` §3) get their own dedicated minimal layout instead of the standard multi-section shell
 - `src/hooks`: Shared React hooks
 - `src/utils`: Small frontend-only utility functions
 
