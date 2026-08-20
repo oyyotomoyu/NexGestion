@@ -90,6 +90,35 @@ Shared by both tier systems — a Customer Tier and a Membership Tier each optio
 
 A tier's default price list is a **default, not an enforced constraint** — a Quote or Checkout line's own `unit_price` remains directly editable regardless of what the customer's tier suggests.
 
+### 2.5 Loyalty Points (B2C)
+
+A points balance a `b2c` customer accrues from purchases and can redeem against a future one. Modeled as an append-only ledger with a derived balance, the same non-destructive pattern already used for Inventory's Stock Movements (`inventory-system.md` §2.6) and Finance's journal entries (`finance-system.md` §3) — current balance is always the sum of ledger rows, never a separately maintained mutable counter, so it can always be reconciled against its history.
+
+| Field | Type | Required | Description |
+| --- | --- | --- | --- |
+| `id` | TEXT/UUID | Yes | Immutable ledger entry ID |
+| `customer_id` | TEXT/UUID | Yes | Links to Section 2.1; only meaningful for `segment = b2c` customers |
+| `points_delta` | INTEGER | Yes | Positive for points earned, negative for points redeemed or expired |
+| `entry_type` | TEXT | Yes | `earned`, `redeemed`, `expired`, `adjustment` |
+| `source_module` | TEXT | No | `checkout`, or `NULL` for a manual adjustment |
+| `source_reference_id` | TEXT/UUID | No | The Checkout transaction (`checkout-system.md` §2.1) that earned or redeemed these points, when `source_module = checkout` |
+| `occurred_at` | DATETIME | Yes | UTC timestamp |
+
+A customer's current points balance is the sum of `points_delta` across their rows. `entry_type = earned` and `entry_type = redeemed` both originate from Checkout (Section 3.2); `expired` and `adjustment` are CRM-side operations with no Checkout counterpart — a lapsed points balance or a customer-service correction, respectively.
+
+#### 2.5.1 Points Earning Rules
+
+Organization-defined accrual configuration — how many points a purchase earns, and whether that rate varies by membership tier.
+
+| Field | Type | Required | Description |
+| --- | --- | --- | --- |
+| `id` | TEXT/UUID | Yes | Immutable rule ID |
+| `membership_tier_id` | TEXT/UUID | No | Optional link to Section 2.3.1 — a tier-specific earn rate; unset is the default rate applied when no tier-specific rule matches |
+| `points_per_currency_unit` | DECIMAL | Yes | e.g. `1` point per `$1` spent, or `0.5` for a slower-earning base tier |
+| `status` | TEXT | Yes | `active`, `inactive` |
+
+A higher-tier member earning points faster than a base member is expressed as two rows here — one with `membership_tier_id` set to the higher tier and a larger `points_per_currency_unit`, one unset as the fallback — rather than a hardcoded tier-multiplier table.
+
 CRM owns its own database (`crm.db`), matching the one-module-one-database convention already used across the platform (`architecture.md` §7).
 
 ## 3. Relationship to Other Systems
@@ -100,7 +129,11 @@ Order's `customer_id`/`customer_name` pair (`order-system.md` §2.3, and Quotes 
 
 ### 3.2 Checkout System
 
-A checkout transaction (`checkout-system.md` §2.1) may carry an optional `crm_customer_id`, typically populated by scanning a membership number (Section 2.3) with the same barcode-scanning capability already used for items (`barcode-scanning.md`) — a membership card is just another scannable code resolving to a record, the same resolution pattern used for items (`inventory-system.md` §2.2). When present, the linked membership's tier may inform member pricing at checkout. Checkout remains fully anonymous by default (`checkout-system.md` §5); this is a pure enrichment, not a requirement.
+A checkout transaction (`checkout-system.md` §2.1) may carry an optional `crm_customer_id`, typically populated by scanning a membership number (Section 2.3) with the same barcode-scanning capability already used for items and coupons (`barcode-scanning.md`, `checkout-system.md` §4.4) — a membership card is just another scannable code resolving to a record, the same resolution pattern used for items (`inventory-system.md` §2.2). Checkout remains fully anonymous by default (`checkout-system.md` §5); this is a pure enrichment, not a requirement. Three effects when a member is linked:
+
+- **Member pricing**: the linked membership's tier may inform member pricing at checkout (`checkout-system.md` §4.5), from Section 2.4's price lists.
+- **Points earning**: completing a transaction posts one `earned` row to Section 2.5's ledger, sized by Section 2.5.1's rule for the customer's tier, against the transaction's `total_amount` (post-discount — points accrue on what was actually paid, not the pre-discount subtotal).
+- **Points redemption**: before completing a transaction, the customer may redeem existing points as a Checkout Discount (`checkout-system.md` §2.3.3, `source_type = points`), posting a matching `redeemed` row here. The currency value of one redeemed point is an open decision (Section 4).
 
 ### 3.3 Procurement System
 
@@ -110,6 +143,9 @@ No relationship. CRM is scoped to customers; Procurement's Vendors (`procurement
 
 - the finalized schema and API contract (the shapes in Section 2 are design notes, not a final schema);
 - the actual discount/pricing computation from a tier's price list beyond "it's a default" — override rules, approval for exceptions, and how conflicting tier/price-list assignments are resolved aren't decided;
+- points redemption conversion rate (how much one point is worth when redeemed as a Checkout Discount, `checkout-system.md` §2.3.3) and any minimum-redemption threshold;
+- points expiration policy — whether earned points ever lapse, and if so on what schedule (a fixed period from `occurred_at`, a program-wide annual reset, or never); `entry_type = expired` (Section 2.5) is modeled but not yet scheduled anywhere;
+- whether Points Earning Rules (Section 2.5.1) can vary by item/category, not just by membership tier;
 - whether an `organization`-type membership (Section 2.3) implies individual members underneath it (e.g. a family plan's individual family members each getting their own card), or stays a single group-level record;
 - whether Procurement's Vendors (`procurement-system.md` §2.1) should eventually unify with CRM's Customer model into one shared party concept;
 - membership renewal/lapse automation, and whether `expires_at` passing is a scheduled job or a derived read at query time, matching how Inventory derives on-hand quantity rather than storing it (`inventory-system.md` §2.6);

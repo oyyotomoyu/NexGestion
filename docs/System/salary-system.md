@@ -84,6 +84,7 @@ A single organization or deployment may span multiple jurisdictions (e.g. a comp
 - **Attendance / Leave**: automatically import overtime hours, leave days, and unpaid-leave days from the Attendance System, expressed in units the jurisdiction pack can interpret (e.g. overtime multipliers by day type). Primarily relevant to `hourly` and `daily` compensation bases.
 - **Employee data**: bank account, national/tax identifier (format varies by country), hire and termination dates (affects prorated calculation for partial periods).
 - **Organization / Team**: different departments, job levels, or legal entities may have different salary rules, jurisdictions, or currencies simultaneously.
+- **General Affairs**: a settled group-meal-order poll (`general-affairs-system.md` §2.6) may produce per-employee Salary Deduction Requests (`general-affairs-system.md` §2.6.1) as one instance of the "salary advances or loan repayments" ad-hoc deduction category (Section 3) — General Affairs only ever produces the request; whether and how a settlement run here actually consumes and applies it is unresolved (Section 12).
 
 ## 6. Settlement (Payroll Run) Mechanism
 
@@ -223,5 +224,6 @@ The following require separate product decisions before implementation:
 - integration scope with Attendance System overtime/leave data;
 - whether the Attendance System exposes a day-level read API suitable for non-monthly settlement windows (Section 6.1), or whether Salary needs its own aggregation path;
 - pointer-only vs. figures-included content for salary notifications (Section 10.2), and whether it is configurable per organization;
-- the email-delivery mechanism for the platform (Section 10.3) — outbound SMTP configuration, sender identity, and retry policy — since none exists today; and
+- the email-delivery mechanism for the platform (Section 10.3) — outbound SMTP configuration, sender identity, and retry policy — since none exists today;
+- the schema and consumption mechanism for ad-hoc, non-recurring deductions (Section 3's "salary advances or loan repayments") — including how a settlement run picks up an external request such as General Affairs' Salary Deduction Requests (`general-affairs-system.md` §2.6.1, §3.8) and marks it applied; and
 - encryption and data-residency approach for sensitive PII fields.

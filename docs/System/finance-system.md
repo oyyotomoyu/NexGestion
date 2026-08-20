@@ -94,15 +94,15 @@ This is the module with the least unique data of its own — most of its value i
 
 ## 8. Fixed Asset Accounting
 
-This is a **financial view**, distinct from and complementary to HR's asset-management module (`hr-system.md` Section 2, item 10 — "equipment issued to employees, e.g. laptops, ID badges"). The two must not be merged:
+This is a **financial view**, distinct from and complementary to General Affairs' asset-custody module (`general-affairs-system.md` §2.1 — "who currently has which physical item, e.g. laptops, ID badges"). The two must not be merged:
 
-| | HR Asset Management | Finance Fixed Asset Accounting |
+| | General Affairs Asset Custody | Finance Fixed Asset Accounting |
 | --- | --- | --- |
 | Answers | Who currently has which physical item? | What is this asset's book value, and how is it depreciated? |
-| Trigger | Onboarding issuance / offboarding return (`hr-system.md` §3.4, §3.7) | Purchase, capitalization threshold, disposal |
-| Owner | HR module | Finance module |
+| Trigger | Onboarding issuance / offboarding return (`hr-system.md` §3.4, §3.7 via `general-affairs-system.md` §2.1.1) | Purchase, capitalization threshold, disposal |
+| Owner | General Affairs module | Finance module |
 
-Recommended relationship: HR's asset record and Finance's fixed-asset record share the same physical asset via a common `asset_id`/tag, but each module owns its own fields — HR owns custodian/location/condition, Finance owns acquisition cost, depreciation method, useful life, and accumulated depreciation. A depreciation run posts a GL journal entry (Section 3) each period; it does not touch HR's custody record.
+Recommended relationship: General Affairs' asset record and Finance's fixed-asset record share the same physical asset via a common `asset_id`/tag, but each module owns its own fields — General Affairs owns custodian/location/condition, Finance owns acquisition cost, depreciation method, useful life, and accumulated depreciation. A depreciation run posts a GL journal entry (Section 3) each period; it does not touch General Affairs' custody record.
 
 ## 9. Tax and Accounting Standards
 
@@ -175,7 +175,8 @@ The initial Admin role automatically receives every accounting and finance permi
 ## 14. Integration Points
 
 - **Salary System**: payroll disbursement should reuse Finance's AP bank-transfer-file capability (Section 4) instead of a second implementation; every settlement run posts a GL journal entry (Section 3).
-- **HR System**: expense reimbursement (Section 6) is the module `hr-system.md` deferred to Finance; HR's asset-management module and Finance's fixed-asset accounting (Section 8) share an `asset_id` but remain separately owned.
+- **HR System**: expense reimbursement (Section 6) is the module `hr-system.md` deferred to Finance.
+- **General Affairs System**: its asset-custody module and Finance's fixed-asset accounting (Section 8) share an `asset_id` but remain separately owned; Office Supply Requisitions may reach Finance only indirectly, through Procurement's own AP linkage (`procurement-system.md` §3.4), never a direct General Affairs → Finance write (`general-affairs-system.md` §3.3).
 - **Group System**: budget scoping (Section 10) reuses the existing organization hierarchy rather than a parallel cost-center model.
 - **Report Files**: financial statement export (Section 11) reuses the existing `report-files.md` generation pattern.
 - **Template System**: expense receipt uploads (Section 6) reuse the existing `template-system.md` file-upload pattern.

@@ -23,7 +23,7 @@ The ten areas of HR responsibility, and which document owns each:
 | 7 | Organization & workforce planning | [`group-system.md`](./group-system.md) (structure/hierarchy) and [`role-system.md`](./role-system.md) (what a user may do); `employee_profiles.job_title` in [`user-system.md`](./user-system.md#32-employee_profiles) | Existing, reference only |
 | 8 | Employee relations | This document — Section 5 (grievance, disciplinary, mediation). Satisfaction surveys and employee activities are deferred to a future Form System. | New (partial) |
 | 9 | Regulatory compliance | Out of scope; see Section 1 | Deferred |
-| 10 | Administrative & records management | Out of scope for now; kept deliberately flexible for a future integration with external finance/accounting systems | Deferred |
+| 10 | Administrative & records management | [`general-affairs-system.md`](./general-affairs-system.md) — asset custody/issuance in particular (Section 3.2 of that document); this document's onboarding/offboarding checklist tasks (Section 3.4) link to it | Existing, reference only |
 
 ## 3. Employment Lifecycle
 
@@ -82,7 +82,7 @@ This table is a record of *what happened and why* for HR purposes; it is never t
 1. A hiring decision (outside this system's scope, Section 2 item 1) results in someone with `users.manage` creating the user and `employee_profile` per user-system.md §3.
 2. `employment_status` is set to `probation` (or `active` if the organization has no probation policy) with `hire_date` set.
 3. An `onboarded` employment event is recorded.
-4. An onboarding checklist tracks the surrounding admin tasks (equipment issuance, document collection, account provisioning). Because Section 2 item 10 (administrative/records management) is deliberately kept flexible for a future finance-system integration, this document only recommends a generic, unopinionated task list rather than a fixed set of onboarding steps:
+4. An onboarding checklist tracks the surrounding admin tasks (equipment issuance, document collection, account provisioning). This document keeps the task list generic and unopinionated rather than a fixed set of onboarding steps — a task that involves issuing physical equipment links to a General Affairs Asset Event (`general-affairs-system.md` §2.1.1) via `related_hr_task_id`, when that module is installed:
 
 | Field | Type | Required | Description |
 | --- | --- | --- | --- |
@@ -249,8 +249,9 @@ The initial Admin role automatically receives every HR permission through `grant
 - **Salary System**: probation completion or a performance outcome may lead to a new compensation-basis record (salary-system.md §2.3); termination triggers final settlement (salary-system.md §6.5); this document never writes salary data directly.
 - **Attendance System**: unaffected; `on_leave` status ownership and leave approval remain as defined in attendance-system.md and group-system.md.
 - **Notification System**: onboarding/offboarding task assignments, review-cycle reminders, and case-status updates should reuse the existing notification-system.md patterns. Employee Relations case content must follow a pointer-only notification style (salary-system.md §10.2's recommended default), never embedding case detail in the notification or email body.
-- **Future Meeting System**: will own interview scheduling for recruitment (Section 2, item 1) — out of scope here beyond noting the boundary.
-- **Future Form System**: will own satisfaction surveys and employee engagement activities (Section 2, item 8) — out of scope here beyond noting the boundary.
+- **General Affairs System**: equipment issuance/return steps in the onboarding/offboarding checklist (Section 3.4, 3.7) link to that module's Asset Events (`general-affairs-system.md` §2.1.1, §3.2) via `related_hr_task_id`; this document does not track physical asset custody itself.
+- **Future Meeting System**: will own interview scheduling for recruitment (Section 2, item 1); it would consume `general-affairs-system.md` §2.3's resource-booking primitive for room reservation rather than duplicating it, once it exists — out of scope here beyond noting the boundary.
+- **Future Form System**: will own satisfaction surveys and employee engagement activities (Section 2, item 8) — out of scope here beyond noting the boundary. `general-affairs-system.md` §2.5's Polls capability is a narrower, lighter-weight statistics tool built for General Affairs' own ad-hoc headcounts and is deliberately not positioned as this Form System; whether the two ever converge is unresolved.
 
 ## 8. Security and Audit
 
