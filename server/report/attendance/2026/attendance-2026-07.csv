@@ -1,0 +1,2 @@
+﻿report_month,user_id,employee_number,display_name,timezone,scheduled_work_days,present_days,absent_days,incomplete_days,worked_hours,worked_hours_minutes,worked_minutes
+2026-07,00000000-0000-0000-0000-000000000001,0,Administrator,Asia/Taipei,23,0,23,0,0.00,0:00,0

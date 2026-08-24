@@ -31,12 +31,13 @@ func testRouter(t *testing.T) *http.ServeMux {
 	reports := system.NewReportFileService(reportDirectory)
 	templates := system.NewTemplateService(directory, filepath.Join(t.TempDir(), "template"), users)
 	salary := system.NewSalaryService(directory, users)
+	approvals := system.NewApprovalService(directory, users)
 	logService, err := applogs.NewService(t.TempDir(), time.UTC)
 	if err != nil {
 		t.Fatal(err)
 	}
 	t.Cleanup(logService.Close)
-	InitRouter(router, users, attendance, notifications, reports, templates, salary, system.NewAuthService(users), logService)
+	InitRouter(router, users, attendance, notifications, reports, templates, salary, approvals, system.NewAuthService(users), logService)
 	return router
 }
 

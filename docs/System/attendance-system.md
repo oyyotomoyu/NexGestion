@@ -59,6 +59,8 @@ This cycle may repeat any number of times while the attendance day is open. The 
 
 Only one session may be open for a user at a time.
 
+Attendance status is independent of the authentication session. **Sign in** and **Sign out** here are attendance actions, not login/logout: the user must hold a valid authentication session to call either endpoint, but the authentication session itself never changes attendance status. Logging out of the application, an access token expiring, or an automatic security logout leaves the attendance day exactly as it was — an open `working` session stays open until it is closed by an explicit attendance sign-out, a midnight rollover (§3.3), or an organization auto sign-out policy (§3.5). For security, the authentication layer enforces its own independent automatic session expiry (auto-logout); that timing has no effect on attendance state.
+
 ### 3.1 Sign In
 
 When a user selects **Sign in**, the server:
@@ -126,6 +128,10 @@ When a day closes:
 - A local day may contain 23 or 25 elapsed hours.
 - Ambiguous or skipped local clock times do not alter stored UTC timestamps.
 - Every session segment belongs to exactly one local attendance date.
+
+### 3.5 Organization Auto Sign-Out
+
+An organization may configure a work-off time after which any user still `working` is automatically transitioned to `non_working`, closing their open session as if they had signed out. This is distinct from both the midnight rollover (§3.3, which continues an open session onto the next day) and authentication auto-logout (which only ends the login session): auto sign-out closes the attendance session itself, using the configured work-off time rather than a user action. The exact configuration, scope (organization-wide vs. per-group), and rollout are deferred (§12).
 
 ## 4. Data Model
 
@@ -554,7 +560,8 @@ The following require separate product decisions before implementation:
 - leave and business trips;
 - overtime approval;
 - payroll export;
-- the final retention period for monthly reports; and
-- administrator correction workflow and approval requirements.
+- the final retention period for monthly reports;
+- administrator correction workflow and approval requirements; and
+- organization-configured auto sign-out at a work-off time (§3.5): whether it is organization-wide or per-group, the exact schedule source, and whether affected users are notified.
 
 These features must extend the event history rather than overwrite original attendance evidence.

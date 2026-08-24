@@ -169,6 +169,31 @@
       "key": "salary.settlement.configure",
       "module": "salary",
       "description": "Assign compensation basis, rate, and jurisdiction to employees"
+    },
+    {
+      "key": "approvals.templates.manage",
+      "module": "approvals",
+      "description": "Create and configure approval flow templates, their steps, and completion notification targets"
+    },
+    {
+      "key": "approvals.read.self",
+      "module": "approvals",
+      "description": "View the status of approval requests the current user submitted or is an assigned approver on"
+    },
+    {
+      "key": "approvals.decide",
+      "module": "approvals",
+      "description": "Approve or reject an approval step the current user is assigned to"
+    },
+    {
+      "key": "approvals.read",
+      "module": "approvals",
+      "description": "View approval requests beyond the current user's own submissions and assignments"
+    },
+    {
+      "key": "approvals.reassign",
+      "module": "approvals",
+      "description": "Manually assign an approver to a request stuck in requires_assignment"
     }
   ]
 }

@@ -12,7 +12,7 @@ import (
 // API handlers belong in this package and may call the system package to
 // perform application operations. The router itself is only responsible for
 // directing requests to the correct handler.
-func InitRouter(router *http.ServeMux, users *system.UserService, attendance *system.AttendanceService, notifications *system.NotificationService, reports *system.ReportFileService, templates *system.TemplateService, salary *system.SalaryService, auth *system.AuthService, logService *applogs.Service) {
+func InitRouter(router *http.ServeMux, users *system.UserService, attendance *system.AttendanceService, notifications *system.NotificationService, reports *system.ReportFileService, templates *system.TemplateService, salary *system.SalaryService, approvals *system.ApprovalService, auth *system.AuthService, logService *applogs.Service) {
 	catalog, err := system.LoadPermissionCatalog()
 	if err != nil {
 		panic("load permission catalog: " + err.Error())
@@ -96,6 +96,19 @@ func InitRouter(router *http.ServeMux, users *system.UserService, attendance *sy
 	router.HandleFunc("GET /api/salary/employees/{userId}/compensation-records", protected("salary.read", listCompensationRecords(salary, false)))
 	router.HandleFunc("GET /api/salary/employees/{userId}/compensation-records/current", protected("salary.read", currentCompensationRecord(salary, false)))
 	router.HandleFunc("POST /api/salary/employees/{userId}/compensation-records", protected("salary.settlement.configure", createCompensationRecord(salary)))
+	router.HandleFunc("GET /api/approvals/templates", protected("approvals.templates.manage", listFlowTemplates(approvals)))
+	router.HandleFunc("POST /api/approvals/templates", protected("approvals.templates.manage", createFlowTemplate(approvals)))
+	router.HandleFunc("GET /api/approvals/templates/{id}", protected("approvals.templates.manage", getFlowTemplate(approvals)))
+	router.HandleFunc("PATCH /api/approvals/templates/{id}", protected("approvals.templates.manage", updateFlowTemplate(approvals)))
+	router.HandleFunc("DELETE /api/approvals/templates/{id}", protected("approvals.templates.manage", deleteFlowTemplate(approvals)))
+	router.HandleFunc("POST /api/approvals/requests", authenticated(submitApprovalRequest(approvals)))
+	router.HandleFunc("GET /api/approvals/requests", protected("approvals.read", listApprovalRequests(approvals)))
+	router.HandleFunc("GET /api/approvals/requests/{id}", protected("approvals.read.self", getApprovalRequest(approvals, users)))
+	router.HandleFunc("POST /api/approvals/requests/{id}/cancel", protected("approvals.read.self", cancelApprovalRequest(approvals)))
+	router.HandleFunc("PATCH /api/approvals/requests/{id}/decide", protected("approvals.decide", decideApprovalRequest(approvals)))
+	router.HandleFunc("PATCH /api/approvals/requests/{id}/reassign", protected("approvals.reassign", reassignApprovalRequest(approvals)))
+	router.HandleFunc("GET /api/approvals/me/requests", protected("approvals.read.self", listMyApprovalRequests(approvals)))
+	router.HandleFunc("GET /api/approvals/me/assignments", protected("approvals.read.self", listMyApprovalAssignments(approvals)))
 
 	// Keep unknown API paths inside the API layer instead of falling through to
 	// the SPA handler.
