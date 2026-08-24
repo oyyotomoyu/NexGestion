@@ -44,6 +44,7 @@ var RequiredDatabases = []DatabaseSpec{
 	attendanceDatabaseSpec(),
 	notificationDatabaseSpec(),
 	templateDatabaseSpec(),
+	salaryDatabaseSpec(),
 }
 
 // syncSystemSettingsDefaults inserts default settings that were added after a
@@ -106,6 +107,9 @@ func ensureDatabase(ctx context.Context, directory string, spec DatabaseSpec) er
 
 	if err := db.PingContext(ctx); err != nil {
 		return fmt.Errorf("connect to database: %w", err)
+	}
+	if _, err := db.ExecContext(ctx, `PRAGMA busy_timeout = 5000`); err != nil {
+		return fmt.Errorf("set busy timeout: %w", err)
 	}
 	if _, err := db.ExecContext(ctx, `PRAGMA foreign_keys = ON`); err != nil {
 		return fmt.Errorf("enable foreign keys: %w", err)

@@ -1,0 +1,121 @@
+.salary-section__intro {
+  display: grid;
+  gap: 4px;
+}
+
+.salary-employee-list {
+  display: grid;
+  gap: 8px;
+  max-height: 320px;
+  overflow-y: auto;
+}
+
+.salary-employee-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 14px;
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+  background: var(--color-background);
+  text-align: left;
+  cursor: pointer;
+}
+
+.salary-employee-row:hover {
+  border-color: var(--color-secondary);
+}
+
+.salary-employee-row.is-selected {
+  border-color: var(--color-primary);
+  background: var(--color-primary-soft);
+}
+
+.salary-select-field {
+  display: grid;
+  gap: 6px;
+}
+
+.salary-select-field .nex-select {
+  width: 100%;
+}
+
+.salary-assign-form {
+  display: grid;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  gap: 16px;
+  align-items: end;
+  padding: 20px;
+  border: 1px solid var(--color-border);
+  border-radius: 10px;
+  background: var(--color-background);
+}
+
+.salary-assign-form__basis,
+.salary-assign-form__rate,
+.salary-assign-form__currency {
+  grid-column: span 2;
+}
+
+.salary-assign-form__jurisdiction,
+.salary-assign-form__start {
+  grid-column: span 3;
+}
+
+.salary-assign-form__note {
+  grid-column: span 6;
+}
+
+.salary-assign-form__actions {
+  grid-column: span 6;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+@media (max-width: 720px) {
+  .salary-assign-form {
+    grid-template-columns: minmax(0, 1fr);
+    padding: 16px;
+  }
+
+  .salary-assign-form__basis,
+  .salary-assign-form__rate,
+  .salary-assign-form__currency,
+  .salary-assign-form__jurisdiction,
+  .salary-assign-form__start,
+  .salary-assign-form__note,
+  .salary-assign-form__actions {
+    grid-column: 1;
+  }
+
+  .salary-assign-form__actions {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .salary-assign-form__actions .nex-button {
+    width: 100%;
+  }
+}
+
+@media (min-width: 721px) and (max-width: 1040px) {
+  .salary-assign-form {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .salary-assign-form__basis,
+  .salary-assign-form__rate,
+  .salary-assign-form__currency,
+  .salary-assign-form__jurisdiction,
+  .salary-assign-form__start {
+    grid-column: span 1;
+  }
+
+  .salary-assign-form__note,
+  .salary-assign-form__actions {
+    grid-column: span 2;
+  }
+}

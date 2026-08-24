@@ -154,6 +154,21 @@
       "key": "templates.manage",
       "module": "templates",
       "description": "View, download, and delete all template files regardless of visibility; manage storage settings"
+    },
+    {
+      "key": "salary.read.self",
+      "module": "salary",
+      "description": "View the current user's own compensation basis and rate history"
+    },
+    {
+      "key": "salary.read",
+      "module": "salary",
+      "description": "View compensation basis and rate history for other employees"
+    },
+    {
+      "key": "salary.settlement.configure",
+      "module": "salary",
+      "description": "Assign compensation basis, rate, and jurisdiction to employees"
     }
   ]
 }

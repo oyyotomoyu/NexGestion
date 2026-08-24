@@ -120,6 +120,16 @@ export default function AppLayout() {
                 {t("global.k_Nav_LeaveApprovals")}
               </NexText>
             </NavLink>
+            <NavLink end to="/salary" onClick={() => setMenuOpen(false)}>
+              <NexText as="span" variant="label" color="inherit">
+                {t("global.k_Nav_Salary")}
+              </NexText>
+            </NavLink>
+            <NavLink to="/salary/employees" onClick={() => setMenuOpen(false)}>
+              <NexText as="span" variant="label" color="inherit">
+                {t("global.k_Nav_SalaryEmployees")}
+              </NexText>
+            </NavLink>
             <NavLink to="/settings" onClick={() => setMenuOpen(false)}>
               <NexText as="span" variant="label" color="inherit">
                 {t("global.k_Nav_Settings")}

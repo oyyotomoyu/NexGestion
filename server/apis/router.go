@@ -12,7 +12,7 @@ import (
 // API handlers belong in this package and may call the system package to
 // perform application operations. The router itself is only responsible for
 // directing requests to the correct handler.
-func InitRouter(router *http.ServeMux, users *system.UserService, attendance *system.AttendanceService, notifications *system.NotificationService, reports *system.ReportFileService, templates *system.TemplateService, auth *system.AuthService, logService *applogs.Service) {
+func InitRouter(router *http.ServeMux, users *system.UserService, attendance *system.AttendanceService, notifications *system.NotificationService, reports *system.ReportFileService, templates *system.TemplateService, salary *system.SalaryService, auth *system.AuthService, logService *applogs.Service) {
 	catalog, err := system.LoadPermissionCatalog()
 	if err != nil {
 		panic("load permission catalog: " + err.Error())
@@ -91,6 +91,11 @@ func InitRouter(router *http.ServeMux, users *system.UserService, attendance *sy
 	router.HandleFunc("GET /api/templates/{id}/download", protected("templates.read", downloadTemplate(templates)))
 	router.HandleFunc("DELETE /api/templates/{id}", authenticated(deleteTemplate(templates)))
 	router.HandleFunc("GET /api/templates/storage", protected("templates.manage", templateStorageUsage(templates)))
+	router.HandleFunc("GET /api/salary/me/compensation-records", protected("salary.read.self", listCompensationRecords(salary, true)))
+	router.HandleFunc("GET /api/salary/me/compensation-records/current", protected("salary.read.self", currentCompensationRecord(salary, true)))
+	router.HandleFunc("GET /api/salary/employees/{userId}/compensation-records", protected("salary.read", listCompensationRecords(salary, false)))
+	router.HandleFunc("GET /api/salary/employees/{userId}/compensation-records/current", protected("salary.read", currentCompensationRecord(salary, false)))
+	router.HandleFunc("POST /api/salary/employees/{userId}/compensation-records", protected("salary.settlement.configure", createCompensationRecord(salary)))
 
 	// Keep unknown API paths inside the API layer instead of falling through to
 	// the SPA handler.

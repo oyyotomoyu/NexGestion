@@ -7,6 +7,8 @@ import AttendanceApprovals from "@/views/AttendanceApprovals";
 import Dashboard from "@/views/Dashboard";
 import Login from "@/views/Login";
 import Notifications from "@/views/Notifications";
+import Salary from "@/views/Salary";
+import SalaryEmployees from "@/views/SalaryEmployees";
 import Templates from "@/views/Templates";
 import Settings from "@/views/Settings";
 import Roles from "@/views/Settings/Roles";
@@ -48,6 +50,14 @@ const routes: RouteObject[] = [
       {
         path: "notifications",
         element: <Notifications />,
+      },
+      {
+        path: "salary",
+        element: <Salary />,
+      },
+      {
+        path: "salary/employees",
+        element: <SalaryEmployees />,
       },
       {
         path: "templates",

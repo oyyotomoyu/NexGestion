@@ -30,12 +30,13 @@ func testRouter(t *testing.T) *http.ServeMux {
 	notifications := system.NewNotificationService(directory, users)
 	reports := system.NewReportFileService(reportDirectory)
 	templates := system.NewTemplateService(directory, filepath.Join(t.TempDir(), "template"), users)
+	salary := system.NewSalaryService(directory, users)
 	logService, err := applogs.NewService(t.TempDir(), time.UTC)
 	if err != nil {
 		t.Fatal(err)
 	}
 	t.Cleanup(logService.Close)
-	InitRouter(router, users, attendance, notifications, reports, templates, system.NewAuthService(users), logService)
+	InitRouter(router, users, attendance, notifications, reports, templates, salary, system.NewAuthService(users), logService)
 	return router
 }
 
@@ -956,6 +957,104 @@ func TestTemplateAPI(t *testing.T) {
 	afterDelete := serveAuthorized(router, http.MethodGet, "/api/templates/"+created.ID+"/download", nil, adminToken)
 	if afterDelete.Code != http.StatusNotFound {
 		t.Fatalf("expected download after delete to 404, got %d", afterDelete.Code)
+	}
+}
+
+func TestSalaryCompensationRecordAPI(t *testing.T) {
+	router := testRouter(t)
+	adminToken, _ := loginForTest(t, router)
+
+	userResponse := serveAuthorized(router, http.MethodPost, "/api/users", []byte(`{
+		"display_name":"Salary Employee",
+		"email":"salary-employee@example.com",
+		"password":"a-secure-user-password"
+	}`), adminToken)
+	if userResponse.Code != http.StatusCreated {
+		t.Fatalf("create employee: %d %s", userResponse.Code, userResponse.Body.String())
+	}
+	var employee system.User
+	if err := json.NewDecoder(userResponse.Body).Decode(&employee); err != nil {
+		t.Fatal(err)
+	}
+
+	loginResponse := serve(router, http.MethodPost, "/api/auth/login", []byte(`{
+		"email":"salary-employee@example.com",
+		"password":"a-secure-user-password"
+	}`))
+	var login struct {
+		AccessToken string `json:"access_token"`
+	}
+	if err := json.NewDecoder(loginResponse.Body).Decode(&login); err != nil {
+		t.Fatal(err)
+	}
+
+	roleResponse := serveAuthorized(router, http.MethodPost, "/api/roles", []byte(`{"title":"Salary Self Viewer"}`), adminToken)
+	var role system.Role
+	if err := json.NewDecoder(roleResponse.Body).Decode(&role); err != nil {
+		t.Fatal(err)
+	}
+	if response := serveAuthorized(router, http.MethodPut, "/api/roles/"+role.ID+"/permissions/salary.read.self", nil, adminToken); response.Code != http.StatusNoContent {
+		t.Fatalf("grant salary.read.self: %d %s", response.Code, response.Body.String())
+	}
+	if response := serveAuthorized(router, http.MethodPut, "/api/roles/"+role.ID+"/users/"+employee.ID, nil, adminToken); response.Code != http.StatusNoContent {
+		t.Fatalf("assign salary role: %d %s", response.Code, response.Body.String())
+	}
+
+	if response := serveAuthorized(router, http.MethodGet, "/api/salary/me/compensation-records/current", nil, login.AccessToken); response.Code != http.StatusNotFound {
+		t.Fatalf("current before assignment: expected %d, got %d %s", http.StatusNotFound, response.Code, response.Body.String())
+	}
+
+	createBody := []byte(`{
+		"compensation_basis":"monthly",
+		"rate_amount":"60000",
+		"currency":"TWD",
+		"jurisdiction_id":"tw",
+		"effective_start_date":"2026-01-01"
+	}`)
+	if response := serveAuthorized(router, http.MethodPost, "/api/salary/employees/"+employee.ID+"/compensation-records", createBody, login.AccessToken); response.Code != http.StatusForbidden {
+		t.Fatalf("employee without configure permission: expected %d, got %d %s", http.StatusForbidden, response.Code, response.Body.String())
+	}
+
+	createResponse := serveAuthorized(router, http.MethodPost, "/api/salary/employees/"+employee.ID+"/compensation-records", createBody, adminToken)
+	if createResponse.Code != http.StatusCreated {
+		t.Fatalf("create compensation record: %d %s", createResponse.Code, createResponse.Body.String())
+	}
+	var record system.CompensationRecord
+	if err := json.NewDecoder(createResponse.Body).Decode(&record); err != nil {
+		t.Fatal(err)
+	}
+	if record.CompensationBasis != "monthly" || record.EffectiveEndDate != nil {
+		t.Fatalf("unexpected created record: %+v", record)
+	}
+
+	currentResponse := serveAuthorized(router, http.MethodGet, "/api/salary/me/compensation-records/current", nil, login.AccessToken)
+	if currentResponse.Code != http.StatusOK {
+		t.Fatalf("current after assignment: %d %s", currentResponse.Code, currentResponse.Body.String())
+	}
+	var current system.CompensationRecord
+	if err := json.NewDecoder(currentResponse.Body).Decode(&current); err != nil {
+		t.Fatal(err)
+	}
+	if current.ID != record.ID {
+		t.Fatalf("expected current record %s, got %s", record.ID, current.ID)
+	}
+
+	if response := serveAuthorized(router, http.MethodGet, "/api/salary/employees/"+employee.ID+"/compensation-records", nil, login.AccessToken); response.Code != http.StatusForbidden {
+		t.Fatalf("employee without salary.read: expected %d, got %d %s", http.StatusForbidden, response.Code, response.Body.String())
+	}
+
+	listResponse := serveAuthorized(router, http.MethodGet, "/api/salary/employees/"+employee.ID+"/compensation-records", nil, adminToken)
+	if listResponse.Code != http.StatusOK {
+		t.Fatalf("list compensation records: %d %s", listResponse.Code, listResponse.Body.String())
+	}
+	var listBody struct {
+		CompensationRecords []system.CompensationRecord `json:"compensation_records"`
+	}
+	if err := json.NewDecoder(listResponse.Body).Decode(&listBody); err != nil {
+		t.Fatal(err)
+	}
+	if len(listBody.CompensationRecords) != 1 || listBody.CompensationRecords[0].ID != record.ID {
+		t.Fatalf("expected one compensation record, got %+v", listBody.CompensationRecords)
 	}
 }
 
