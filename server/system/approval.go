@@ -196,19 +196,21 @@ type ReassignApprovalInput struct {
 }
 
 type ApprovalService struct {
-	databasePath string
-	users        *UserService
-	now          func() time.Time
+	databasePath  string
+	users         *UserService
+	notifications *NotificationService
+	now           func() time.Time
 }
 
-func NewApprovalService(databaseDirectory string, users *UserService) *ApprovalService {
+func NewApprovalService(databaseDirectory string, users *UserService, notifications *NotificationService) *ApprovalService {
 	if strings.TrimSpace(databaseDirectory) == "" {
 		databaseDirectory = defaultDatabaseDirectory
 	}
 	return &ApprovalService{
-		databasePath: filepath.Join(databaseDirectory, "approval.db"),
-		users:        users,
-		now:          time.Now,
+		databasePath:  filepath.Join(databaseDirectory, "approval.db"),
+		users:         users,
+		notifications: notifications,
+		now:           time.Now,
 	}
 }
 
@@ -738,6 +740,16 @@ func (s *ApprovalService) SubmitRequest(ctx context.Context, requestedByUserID s
 	if err := tx.Commit(); err != nil {
 		return nil, err
 	}
+	if status == ApprovalRequestPending && len(steps) > 0 {
+		last := steps[len(steps)-1]
+		if err := s.notifyStepAssignees(ctx, template, id, last.stepOrder, last.assignedUserIDs); err != nil {
+			return nil, err
+		}
+	} else if status == ApprovalRequestApproved {
+		if err := s.notifyCompletion(ctx, template, id, requestedByUserID, ApprovalRequestApproved); err != nil {
+			return nil, err
+		}
+	}
 	return s.getRequest(ctx, db, id)
 }
 
@@ -778,6 +790,10 @@ func (s *ApprovalService) DecideRequest(ctx context.Context, approverID, request
 	if requestStatus != ApprovalRequestPending {
 		return nil, ErrApprovalDecision
 	}
+	template, err := s.getFlowTemplate(ctx, tx, flowTemplateID)
+	if err != nil {
+		return nil, err
+	}
 
 	var stepID string
 	err = tx.QueryRowContext(ctx, `SELECT id FROM approval_steps
@@ -813,13 +829,12 @@ func (s *ApprovalService) DecideRequest(ctx context.Context, approverID, request
 		if err := tx.Commit(); err != nil {
 			return nil, err
 		}
+		if err := s.notifyCompletion(ctx, template, requestID, requestedByUserID, ApprovalRequestRejected); err != nil {
+			return nil, err
+		}
 		return s.getRequest(ctx, db, requestID)
 	}
 
-	template, err := s.getFlowTemplate(ctx, tx, flowTemplateID)
-	if err != nil {
-		return nil, err
-	}
 	var amountValue *float64
 	if amountText.Valid {
 		value, err := strconv.ParseFloat(amountText.String, 64)
@@ -845,6 +860,16 @@ func (s *ApprovalService) DecideRequest(ctx context.Context, approverID, request
 	}
 	if err := tx.Commit(); err != nil {
 		return nil, err
+	}
+	if nextStatus == ApprovalRequestPending && len(nextSteps) > 0 {
+		last := nextSteps[len(nextSteps)-1]
+		if err := s.notifyStepAssignees(ctx, template, requestID, last.stepOrder, last.assignedUserIDs); err != nil {
+			return nil, err
+		}
+	} else if nextStatus == ApprovalRequestApproved {
+		if err := s.notifyCompletion(ctx, template, requestID, requestedByUserID, ApprovalRequestApproved); err != nil {
+			return nil, err
+		}
 	}
 	return s.getRequest(ctx, db, requestID)
 }
@@ -1188,6 +1213,97 @@ func insertGeneratedSteps(ctx context.Context, tx *sql.Tx, requestID string, ste
 		}
 	}
 	return nil
+}
+
+// ---- Notifications ----
+//
+// See docs/System/approval-system.md Section 4.3: assigned approver(s) are
+// notified each time a step becomes current, and the requester is notified
+// on the request's final decision, alongside every Completion Notification
+// Target (Section 2.5) matching that outcome. Sent through the existing
+// notification-system.md service using the seed Admin account as sender,
+// since these are system-generated rather than authored by a human sender
+// subject to notifications.send.* permissions. Messages carry only the
+// request's own identifiers (pointer-only, per Section 4.3) — this service
+// never stores the source module's record content to begin with (Section
+// 2.3), so there is nothing sensitive to leak.
+
+func (s *ApprovalService) notifyStepAssignees(ctx context.Context, template *ApprovalFlowTemplate, requestID string, stepOrder int, userIDs []string) error {
+	if len(userIDs) == 0 {
+		return nil
+	}
+	audiences := make([]NotificationAudienceInput, 0, len(userIDs))
+	for _, userID := range userIDs {
+		audiences = append(audiences, NotificationAudienceInput{Scope: "user", TargetUserID: userID})
+	}
+	title := fmt.Sprintf("Approval needed: %s", template.Name)
+	message := fmt.Sprintf("Approval request %s (step %d of %q) is awaiting your decision.", requestID, stepOrder, template.Name)
+	return s.sendNotification(ctx, title, message, "important", audiences)
+}
+
+func (s *ApprovalService) notifyCompletion(ctx context.Context, template *ApprovalFlowTemplate, requestID, requestedByUserID, outcome string) error {
+	requesterType := "success"
+	if outcome == ApprovalRequestRejected {
+		requesterType = "warning"
+	}
+	requesterTitle := fmt.Sprintf("Request %s: %s", outcome, template.Name)
+	requesterMessage := fmt.Sprintf("Your %q approval request %s has been %s.", template.Name, requestID, outcome)
+	if err := s.sendNotification(ctx, requesterTitle, requesterMessage, requesterType,
+		[]NotificationAudienceInput{{Scope: "user", TargetUserID: requestedByUserID}}); err != nil {
+		return err
+	}
+
+	audiences, err := s.resolveCompletionAudiences(ctx, template.NotificationTargets, outcome, requestedByUserID)
+	if err != nil {
+		return err
+	}
+	if len(audiences) == 0 {
+		return nil
+	}
+	targetTitle := fmt.Sprintf("Approval %s: %s", outcome, template.Name)
+	targetMessage := fmt.Sprintf("The %q approval request %s has been %s.", template.Name, requestID, outcome)
+	return s.sendNotification(ctx, targetTitle, targetMessage, requesterType, audiences)
+}
+
+// resolveCompletionAudiences turns Completion Notification Targets (Section
+// 2.5) matching outcome into notification audiences. target_type =
+// group_manager resolves to the group's actual manager(s) — excluding the
+// requester, same as approver resolution — and is sent as individual "user"
+// audiences, since the notification system's "group" scope would otherwise
+// reach the whole group rather than just its manager.
+func (s *ApprovalService) resolveCompletionAudiences(ctx context.Context, targets []ApprovalNotificationTarget, outcome, requestedByUserID string) ([]NotificationAudienceInput, error) {
+	audiences := []NotificationAudienceInput{}
+	for _, target := range targets {
+		if target.NotifyOn != ApprovalNotifyOnBoth && target.NotifyOn != outcome {
+			continue
+		}
+		switch target.TargetType {
+		case ApprovalTargetSpecificUser:
+			audiences = append(audiences, NotificationAudienceInput{Scope: "user", TargetUserID: *target.TargetUserID})
+		case ApprovalTargetRole:
+			audiences = append(audiences, NotificationAudienceInput{Scope: "role", TargetRoleID: *target.TargetRoleID})
+		case ApprovalTargetGroupManager:
+			managerIDs, err := s.users.GroupManagerUserIDs(ctx, *target.TargetGroupID, requestedByUserID)
+			if err != nil {
+				return nil, err
+			}
+			for _, managerID := range managerIDs {
+				audiences = append(audiences, NotificationAudienceInput{Scope: "user", TargetUserID: managerID})
+			}
+		}
+	}
+	return audiences, nil
+}
+
+func (s *ApprovalService) sendNotification(ctx context.Context, title, message, typeCode string, audiences []NotificationAudienceInput) error {
+	_, err := s.notifications.Create(ctx, adminUserID, CreateNotificationInput{
+		Title:        title,
+		Message:      message,
+		TypeCode:     typeCode,
+		DurationCode: "month",
+		Audiences:    audiences,
+	})
+	return err
 }
 
 func parseApprovalAmount(raw *string) (*float64, *string, error) {

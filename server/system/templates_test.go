@@ -67,7 +67,7 @@ func createTestUserWithPermission(t *testing.T, users *UserService, email, permi
 	if permissionID == "" {
 		t.Fatalf("permission %q not found in catalog", permissionKey)
 	}
-	if err := users.SetRolePermission(ctx, adminUserID, role.ID, permissionID, true); err != nil {
+	if err := users.SetRolePermission(ctx, adminUserID, role.ID, permissionID, true, "a-secure-test-password"); err != nil {
 		t.Fatal(err)
 	}
 	if err := users.SetRoleUser(ctx, adminUserID, role.ID, user.ID, true); err != nil {

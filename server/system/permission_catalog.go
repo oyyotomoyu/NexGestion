@@ -16,9 +16,12 @@ import (
 const permissionConfigEnvironment = "NEXGESTION_PERMISSION_CONFIG"
 
 type PermissionDefinition struct {
-	Key         string `json:"key"`
-	Module      string `json:"module"`
-	Description string `json:"description"`
+	Key              string `json:"key"`
+	Module           string `json:"module"`
+	Description      string `json:"description"`
+	HighRisk         bool   `json:"high_risk,omitempty"`
+	HighRiskReason   string `json:"high_risk_reason,omitempty"`
+	RequiresPassword bool   `json:"requires_password,omitempty"`
 }
 
 type PermissionCatalog struct {
@@ -47,6 +50,7 @@ func LoadPermissionCatalog() (*PermissionCatalog, error) {
 		item.Key = strings.TrimSpace(item.Key)
 		item.Module = strings.TrimSpace(item.Module)
 		item.Description = strings.TrimSpace(item.Description)
+		item.HighRiskReason = strings.TrimSpace(item.HighRiskReason)
 		if item.Key == "" || item.Module == "" {
 			return nil, fmt.Errorf("permission catalog entry %d requires key and module", index)
 		}
@@ -56,6 +60,20 @@ func LoadPermissionCatalog() (*PermissionCatalog, error) {
 		seen[item.Key] = struct{}{}
 	}
 	return &catalog, nil
+}
+
+func (c *PermissionCatalog) Definition(key string) (PermissionDefinition, bool) {
+	for _, permission := range c.Permissions {
+		if permission.Key == key {
+			return permission, true
+		}
+	}
+	return PermissionDefinition{}, false
+}
+
+func (c *PermissionCatalog) RequiresPasswordForGrant(key string) bool {
+	permission, ok := c.Definition(key)
+	return ok && permission.HighRisk && permission.RequiresPassword
 }
 
 func (c *PermissionCatalog) Contains(key string) bool {
@@ -99,12 +117,16 @@ func syncPermissionCatalog(ctx context.Context, tx *sql.Tx) error {
 	now := time.Now().UTC().Format(time.RFC3339)
 	for _, permission := range catalog.Permissions {
 		if _, err := tx.ExecContext(ctx, `INSERT INTO permissions
-			(id, permission_key, module, description, created_at)
-			VALUES (?, ?, ?, ?, ?)
+			(id, permission_key, module, description, high_risk, high_risk_reason, requires_password, created_at)
+			VALUES (?, ?, ?, ?, ?, ?, ?, ?)
 			ON CONFLICT(permission_key) DO UPDATE SET
 				module = excluded.module,
-				description = excluded.description`,
-			permission.Key, permission.Key, permission.Module, nullableCatalogDescription(permission.Description), now,
+				description = excluded.description,
+				high_risk = excluded.high_risk,
+				high_risk_reason = excluded.high_risk_reason,
+				requires_password = excluded.requires_password`,
+			permission.Key, permission.Key, permission.Module, nullableCatalogDescription(permission.Description),
+			boolInt(permission.HighRisk), nullableCatalogDescription(permission.HighRiskReason), boolInt(permission.RequiresPassword), now,
 		); err != nil {
 			return fmt.Errorf("sync permission %q: %w", permission.Key, err)
 		}

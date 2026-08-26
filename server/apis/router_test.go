@@ -31,7 +31,7 @@ func testRouter(t *testing.T) *http.ServeMux {
 	reports := system.NewReportFileService(reportDirectory)
 	templates := system.NewTemplateService(directory, filepath.Join(t.TempDir(), "template"), users)
 	salary := system.NewSalaryService(directory, users)
-	approvals := system.NewApprovalService(directory, users)
+	approvals := system.NewApprovalService(directory, users, notifications)
 	logService, err := applogs.NewService(t.TempDir(), time.UTC)
 	if err != nil {
 		t.Fatal(err)
@@ -393,7 +393,11 @@ func TestDelegatedRoleManagerCannotEditRolePermissions(t *testing.T) {
 		t.Fatal(err)
 	}
 	for _, permissionID := range []string{"roles.read", "roles.manage", "roles.assign", "permissions.assign"} {
-		response := serveAuthorized(router, http.MethodPut, "/api/roles/"+role.ID+"/permissions/"+permissionID, nil, adminToken)
+		var body []byte
+		if permissionID != "roles.read" {
+			body = []byte(`{"current_password":"a-secure-test-password"}`)
+		}
+		response := serveAuthorized(router, http.MethodPut, "/api/roles/"+role.ID+"/permissions/"+permissionID, body, adminToken)
 		if response.Code != http.StatusNoContent {
 			t.Fatalf("grant %s: %d %s", permissionID, response.Code, response.Body.String())
 		}
@@ -449,6 +453,32 @@ func TestDelegatedRoleManagerCannotEditRolePermissions(t *testing.T) {
 		if assigned.ID == role.ID {
 			t.Fatal("deleted custom role remained assigned")
 		}
+	}
+}
+
+func TestHighRiskRolePermissionGrantRequiresAdminPassword(t *testing.T) {
+	router := testRouter(t)
+	adminToken, _ := loginForTest(t, router)
+	roleResponse := serveAuthorized(router, http.MethodPost, "/api/roles", []byte(`{"title":"Sensitive Operator"}`), adminToken)
+	var role system.Role
+	if err := json.NewDecoder(roleResponse.Body).Decode(&role); err != nil {
+		t.Fatal(err)
+	}
+	missing := serveAuthorized(router, http.MethodPut, "/api/roles/"+role.ID+"/permissions/users.manage", nil, adminToken)
+	if missing.Code != http.StatusForbidden {
+		t.Fatalf("grant without password: expected %d, got %d", http.StatusForbidden, missing.Code)
+	}
+	wrong := serveAuthorized(router, http.MethodPut, "/api/roles/"+role.ID+"/permissions/users.manage", []byte(`{"current_password":"wrong-password"}`), adminToken)
+	if wrong.Code != http.StatusForbidden {
+		t.Fatalf("grant with wrong password: expected %d, got %d", http.StatusForbidden, wrong.Code)
+	}
+	granted := serveAuthorized(router, http.MethodPut, "/api/roles/"+role.ID+"/permissions/users.manage", []byte(`{"current_password":"a-secure-test-password"}`), adminToken)
+	if granted.Code != http.StatusNoContent {
+		t.Fatalf("grant with password: expected %d, got %d: %s", http.StatusNoContent, granted.Code, granted.Body.String())
+	}
+	revoked := serveAuthorized(router, http.MethodDelete, "/api/roles/"+role.ID+"/permissions/users.manage", nil, adminToken)
+	if revoked.Code != http.StatusNoContent {
+		t.Fatalf("revoke high-risk permission: expected %d, got %d: %s", http.StatusNoContent, revoked.Code, revoked.Body.String())
 	}
 }
 

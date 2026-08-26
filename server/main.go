@@ -55,7 +55,7 @@ func main() {
 		log.Fatalf("template directory initialization failed: %v", err)
 	}
 	salary := system.NewSalaryService(databaseDirectory, users)
-	approvals := system.NewApprovalService(databaseDirectory, users)
+	approvals := system.NewApprovalService(databaseDirectory, users, notifications)
 	apis.InitRouter(mux, users, attendance, notifications, reports, templates, salary, approvals, system.NewAuthService(users), logService)
 	go runAttendanceMaintenance(attendance, logService)
 	go runNotificationMaintenance(notifications, logService)

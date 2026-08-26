@@ -367,12 +367,8 @@ func (s *UserService) Update(ctx context.Context, actorUserID, id string, input 
 		if input.CurrentPassword == nil || strings.TrimSpace(*input.CurrentPassword) == "" {
 			return nil, ErrCurrentPasswordWrong
 		}
-		var passwordHash string
-		if err := db.QueryRowContext(ctx, `SELECT password_hash FROM users WHERE id = ?`, id).Scan(&passwordHash); err != nil {
+		if err := verifyUserPassword(ctx, db, id, *input.CurrentPassword); err != nil {
 			return nil, err
-		}
-		if bcrypt.CompareHashAndPassword([]byte(passwordHash), []byte(*input.CurrentPassword)) != nil {
-			return nil, ErrCurrentPasswordWrong
 		}
 	}
 	sets, args := []string{}, []any{}
@@ -439,6 +435,23 @@ func (s *UserService) Update(ctx context.Context, actorUserID, id string, input 
 		}
 	}
 	return getUser(ctx, db, id)
+}
+
+func verifyUserPassword(ctx context.Context, db *sql.DB, id, password string) error {
+	if strings.TrimSpace(password) == "" {
+		return ErrCurrentPasswordWrong
+	}
+	var passwordHash string
+	if err := db.QueryRowContext(ctx, `SELECT password_hash FROM users WHERE id = ? AND deleted_at IS NULL`, id).Scan(&passwordHash); err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return ErrCurrentPasswordWrong
+		}
+		return err
+	}
+	if bcrypt.CompareHashAndPassword([]byte(passwordHash), []byte(password)) != nil {
+		return ErrCurrentPasswordWrong
+	}
+	return nil
 }
 
 func (s *UserService) Delete(ctx context.Context, actorUserID, id string) error {

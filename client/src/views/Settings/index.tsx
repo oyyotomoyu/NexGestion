@@ -11,6 +11,11 @@ export default function Settings() {
   const { t } = useTranslation("ui");
   const { user } = useAuth();
   useDocumentTitle(t("global.k_Settings_PageTitle"));
+  const hasPermission = (key: string) =>
+    user?.is_protected === true || user?.roles.some((role) =>
+      role.grants_all_permissions ||
+      role.permissions.some((permission) => permission.permission_key === key),
+    ) === true;
 
   return (
     <section className="settings">
@@ -25,15 +30,21 @@ export default function Settings() {
             <NexText as="span" color="inherit">{t("global.k_Settings_Users_MyProfile")}</NexText>
           </NavLink> : null}
           <NexText variant="label">{t("global.k_Settings_AccessControl_Title")}</NexText>
-          <NavLink to="access-control/users">
-            <NexText as="span" color="inherit">{t("global.k_Settings_Users_Title")}</NexText>
-          </NavLink>
-          <NavLink to="access-control/roles">
-            <NexText as="span" color="inherit">{t("global.k_Settings_Roles_Title")}</NexText>
-          </NavLink>
-          <NavLink to="access-control/groups">
-            <NexText as="span" color="inherit">{t("global.k_Settings_Groups_Title")}</NexText>
-          </NavLink>
+          {hasPermission("users.access") ? (
+            <NavLink to="access-control/users">
+              <NexText as="span" color="inherit">{t("global.k_Settings_Users_Title")}</NexText>
+            </NavLink>
+          ) : null}
+          {hasPermission("roles.access") ? (
+            <NavLink to="access-control/roles">
+              <NexText as="span" color="inherit">{t("global.k_Settings_Roles_Title")}</NexText>
+            </NavLink>
+          ) : null}
+          {hasPermission("groups.access") ? (
+            <NavLink to="access-control/groups">
+              <NexText as="span" color="inherit">{t("global.k_Settings_Groups_Title")}</NexText>
+            </NavLink>
+          ) : null}
         </nav>
         <div className="settings__content">
           <Outlet />

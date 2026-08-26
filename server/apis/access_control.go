@@ -2,6 +2,8 @@ package apis
 
 import (
 	"context"
+	"errors"
+	"io"
 	"net/http"
 	"nexgestion/server/system"
 )
@@ -66,7 +68,18 @@ func listPermissions(users *system.UserService) http.HandlerFunc {
 }
 func setRolePermission(users *system.UserService, grant bool) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		if err := users.SetRolePermission(r.Context(), authenticatedUserID(r), r.PathValue("id"), r.PathValue("permissionId"), grant); err != nil {
+		var input struct {
+			CurrentPassword string `json:"current_password"`
+		}
+		if r.Body != nil && r.ContentLength != 0 {
+			if err := decodeJSON(w, r, &input); err != nil {
+				if !errors.Is(err, io.EOF) {
+					writeJSON(w, http.StatusBadRequest, map[string]string{"error": err.Error()})
+					return
+				}
+			}
+		}
+		if err := users.SetRolePermission(r.Context(), authenticatedUserID(r), r.PathValue("id"), r.PathValue("permissionId"), grant, input.CurrentPassword); err != nil {
 			writeSystemError(w, err)
 			return
 		}

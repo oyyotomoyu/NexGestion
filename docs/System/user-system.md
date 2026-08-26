@@ -160,6 +160,8 @@ A user may hold multiple roles. Effective permissions are the union of permissio
 
 Role permission grants are reserved for the protected initial administrator. Other users cannot change grants even if a role contains `permissions.assign`. Changes to assignments must be audited.
 
+High-risk permission grants require an additional confirmation step. When the protected administrator grants a catalog permission marked `high_risk` and `requires_password`, the UI must warn about the risk and the API must verify the administrator's current password before creating the grant.
+
 The initial protected administrator's `Admin` role has `grants_all_permissions = 1`. This flag grants every current and future permission without requiring individual assignment. The protected administrator must always retain this role and flag and cannot be disabled, deleted, removed from the role, or restricted by another user.
 
 ### 3.5 Groups

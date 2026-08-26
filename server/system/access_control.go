@@ -77,7 +77,7 @@ func (s *UserService) ListPermissions(ctx context.Context, query ListQuery) (Lis
 	}
 	listArgs := append([]any{}, args...)
 	listArgs = append(listArgs, query.PageSize, ListOffset(query))
-	rows, err := db.QueryContext(ctx, `SELECT id,permission_key,module,description FROM permissions WHERE `+whereSQL+` ORDER BY `+sortExpression+` `+query.Order+`, id ASC LIMIT ? OFFSET ?`, listArgs...)
+	rows, err := db.QueryContext(ctx, `SELECT id,permission_key,module,description,high_risk,high_risk_reason,requires_password FROM permissions WHERE `+whereSQL+` ORDER BY `+sortExpression+` `+query.Order+`, id ASC LIMIT ? OFFSET ?`, listArgs...)
 	if err != nil {
 		return ListResult[Permission]{}, err
 	}
@@ -85,9 +85,12 @@ func (s *UserService) ListPermissions(ctx context.Context, query ListQuery) (Lis
 	result := []Permission{}
 	for rows.Next() {
 		var p Permission
-		if err := rows.Scan(&p.ID, &p.PermissionKey, &p.Module, &p.Description); err != nil {
+		var highRisk, requiresPassword int
+		if err := rows.Scan(&p.ID, &p.PermissionKey, &p.Module, &p.Description, &highRisk, &p.HighRiskReason, &requiresPassword); err != nil {
 			return ListResult[Permission]{}, err
 		}
+		p.HighRisk = highRisk == 1
+		p.RequiresPassword = requiresPassword == 1
 		result = append(result, p)
 	}
 	if err := rows.Err(); err != nil {
@@ -98,14 +101,17 @@ func (s *UserService) ListPermissions(ctx context.Context, query ListQuery) (Lis
 
 func getPermission(ctx context.Context, db *sql.DB, id string) (*Permission, error) {
 	var p Permission
-	err := db.QueryRowContext(ctx, `SELECT id,permission_key,module,description FROM permissions WHERE id=?`, id).Scan(&p.ID, &p.PermissionKey, &p.Module, &p.Description)
+	var highRisk, requiresPassword int
+	err := db.QueryRowContext(ctx, `SELECT id,permission_key,module,description,high_risk,high_risk_reason,requires_password FROM permissions WHERE id=?`, id).Scan(&p.ID, &p.PermissionKey, &p.Module, &p.Description, &highRisk, &p.HighRiskReason, &requiresPassword)
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil, ErrPermissionNotFound
 	}
+	p.HighRisk = highRisk == 1
+	p.RequiresPassword = requiresPassword == 1
 	return &p, err
 }
 
-func (s *UserService) SetRolePermission(ctx context.Context, actor, roleID, permissionID string, grant bool) error {
+func (s *UserService) SetRolePermission(ctx context.Context, actor, roleID, permissionID string, grant bool, currentPassword string) error {
 	// Role metadata management may be delegated through roles.manage, but the
 	// authority to change what a role grants is reserved for the initial
 	// administrator. Keeping this check independent of permissions.assign
@@ -125,8 +131,18 @@ func (s *UserService) SetRolePermission(ctx context.Context, actor, roleID, perm
 	if role.IsSystem {
 		return ErrRoleProtected
 	}
-	if _, err = getPermission(ctx, db, permissionID); err != nil {
+	permission, err := getPermission(ctx, db, permissionID)
+	if err != nil {
 		return err
+	}
+	catalog, err := LoadPermissionCatalog()
+	if err != nil {
+		return err
+	}
+	if grant && catalog.RequiresPasswordForGrant(permission.PermissionKey) {
+		if err := verifyUserPassword(ctx, db, actor, currentPassword); err != nil {
+			return err
+		}
 	}
 	if grant {
 		_, err = db.ExecContext(ctx, `INSERT OR IGNORE INTO role_permissions(role_id,permission_id,created_at) VALUES(?,?,?)`, roleID, permissionID, time.Now().UTC().Format(time.RFC3339))

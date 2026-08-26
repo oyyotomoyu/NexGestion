@@ -54,7 +54,19 @@ export default function RoleDetail() {
     }
     listPermissions().then(setPermissions).catch(()=>setError(true));
   },[roleId,user?.is_protected]);
-  async function togglePermission(permission:Permission,grant:boolean){setSaving(true);try{await setRolePermission(roleId,permission.id,grant);const refreshed=await getRole(roleId);setRole(refreshed)}catch{setError(true)}finally{setSaving(false)}}
+  async function togglePermission(permission:Permission,grant:boolean){
+    let currentPassword: string | undefined;
+    if (grant && permission.high_risk && permission.requires_password) {
+      const warning = permission.high_risk_reason
+        ? `${t("global.k_Settings_Roles_HighRiskWarning")}\n\n${permission.high_risk_reason}`
+        : t("global.k_Settings_Roles_HighRiskWarning");
+      if (!window.confirm(warning)) return;
+      currentPassword = window.prompt(t("global.k_Settings_Roles_AdminPasswordPrompt")) ?? undefined;
+      if (!currentPassword) return;
+    }
+    setSaving(true);
+    try{await setRolePermission(roleId,permission.id,grant,currentPassword);const refreshed=await getRole(roleId);setRole(refreshed)}catch{setError(true)}finally{setSaving(false)}
+  }
 
   async function save(event: FormEvent) {
     event.preventDefault();
@@ -156,7 +168,7 @@ export default function RoleDetail() {
             ))}
           </>
         ) : canAssignPermissions ? (
-          permissions.map((permission)=>{const granted=role.permissions.some((item)=>item.id===permission.id);return <label key={permission.id}><input type="checkbox" checked={granted} disabled={saving} onChange={(event)=>void togglePermission(permission,event.target.checked)}/> {permission.permission_key}</label>})
+          permissions.map((permission)=>{const granted=role.permissions.some((item)=>item.id===permission.id);return <label key={permission.id}><input type="checkbox" checked={granted} disabled={saving} onChange={(event)=>void togglePermission(permission,event.target.checked)}/> {permission.permission_key}{permission.high_risk ? ` (${t("global.k_Settings_Roles_HighRisk")})` : ""}</label>})
         ) : role.permissions.length ? (
           role.permissions.map((permission) => (
             <NexText key={permission.id}>{permission.permission_key}</NexText>

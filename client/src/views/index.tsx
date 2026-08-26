@@ -1,6 +1,7 @@
 import { Navigate, RouteObject, useRoutes } from "react-router-dom";
 
 import { ProtectedRoute } from "@/auth/ProtectedRoute";
+import { useAuth } from "@/auth/AuthProvider";
 import AppLayout from "@/layouts/AppLayout";
 import Attendance from "@/views/Attendance";
 import AttendanceApprovals from "@/views/AttendanceApprovals";
@@ -17,6 +18,21 @@ import Groups from "@/views/Settings/Groups";
 import GroupDetail from "@/views/Settings/Groups/GroupDetail";
 import Users from "@/views/Settings/Users";
 import UserDetail from "@/views/Settings/Users/UserDetail";
+
+function SettingsDefaultRedirect({ nested = false }: { nested?: boolean }) {
+  const { user } = useAuth();
+  const hasPermission = (key: string) =>
+    user?.is_protected === true || user?.roles.some((role) =>
+      role.grants_all_permissions ||
+      role.permissions.some((permission) => permission.permission_key === key),
+    ) === true;
+
+  const prefix = nested ? "" : "access-control/";
+  if (hasPermission("roles.access")) return <Navigate to={`${prefix}roles`} replace />;
+  if (hasPermission("users.access")) return <Navigate to={`${prefix}users`} replace />;
+  if (hasPermission("groups.access")) return <Navigate to={`${prefix}groups`} replace />;
+  return <Navigate to="/dashboard" replace />;
+}
 
 const routes: RouteObject[] = [
   {
@@ -41,27 +57,27 @@ const routes: RouteObject[] = [
       },
       {
         path: "attendance",
-        element: <Attendance />,
+        element: <ProtectedRoute permission="attendance.access"><Attendance /></ProtectedRoute>,
       },
       {
         path: "attendance/approvals",
-        element: <AttendanceApprovals />,
+        element: <ProtectedRoute permission="attendance.access"><AttendanceApprovals /></ProtectedRoute>,
       },
       {
         path: "notifications",
-        element: <Notifications />,
+        element: <ProtectedRoute permission="notifications.access"><Notifications /></ProtectedRoute>,
       },
       {
         path: "salary",
-        element: <Salary />,
+        element: <ProtectedRoute permission="salary.access"><Salary /></ProtectedRoute>,
       },
       {
         path: "salary/employees",
-        element: <SalaryEmployees />,
+        element: <ProtectedRoute permission="salary.access"><SalaryEmployees /></ProtectedRoute>,
       },
       {
         path: "templates",
-        element: <Templates />,
+        element: <ProtectedRoute permission="templates.access"><Templates /></ProtectedRoute>,
       },
       {
         path: "settings",
@@ -69,7 +85,7 @@ const routes: RouteObject[] = [
         children: [
           {
             index: true,
-            element: <Navigate to="access-control/roles" replace />,
+            element: <SettingsDefaultRedirect />,
           },
           { path: "profile/:userId", element: <UserDetail /> },
           {
@@ -77,25 +93,25 @@ const routes: RouteObject[] = [
             children: [
               {
                 index: true,
-                element: <Navigate to="roles" replace />,
+                element: <SettingsDefaultRedirect nested />,
               },
               {
                 path: "roles",
-                element: <Roles />,
+                element: <ProtectedRoute permission="roles.access"><Roles /></ProtectedRoute>,
               },
-              { path: "users", element: <Users /> },
-              { path: "users/:userId", element: <UserDetail /> },
+              { path: "users", element: <ProtectedRoute permission="users.access"><Users /></ProtectedRoute> },
+              { path: "users/:userId", element: <ProtectedRoute permission="users.access"><UserDetail /></ProtectedRoute> },
               {
                 path: "roles/:roleId",
-                element: <RoleDetail />,
+                element: <ProtectedRoute permission="roles.access"><RoleDetail /></ProtectedRoute>,
               },
               {
                 path: "groups",
-                element: <Groups />,
+                element: <ProtectedRoute permission="groups.access"><Groups /></ProtectedRoute>,
               },
               {
                 path: "groups/:groupId",
-                element: <GroupDetail />,
+                element: <ProtectedRoute permission="groups.access"><GroupDetail /></ProtectedRoute>,
               },
             ],
           },

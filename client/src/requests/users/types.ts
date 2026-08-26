@@ -31,6 +31,9 @@ export interface Permission {
   permission_key: string;
   module: string;
   description: string | null;
+  high_risk: boolean;
+  high_risk_reason: string | null;
+  requires_password: boolean;
 }
 
 export interface UserGroup {

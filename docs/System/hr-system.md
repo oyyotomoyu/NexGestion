@@ -224,21 +224,22 @@ Employee Relations case data requires the strictest access control of any HR dat
 
 ## 6. Permissions
 
-Planned permission keys, to be added to `config/permission.json` when these APIs are implemented, following the same catalog convention as other modules (user-system.md §3.4):
+Permission keys in `config/permission.json` follow the same catalog convention as other modules (user-system.md §3.4):
 
 | Permission | Allows |
 | --- | --- |
+| `hr.access` | Access the HR System |
 | `hr.employment.read.self` | View the current user's own employment history and status |
 | `hr.employment.read` | View employment history and status for other employees |
 | `hr.employment.manage` | Record onboarding, probation outcomes, transfers, suspensions, and termination (Section 3) |
 | `hr.tasks.manage` | Create and update onboarding/offboarding checklist tasks (Section 3.4) |
-| `performance.read.self` | View the current user's own goals and finalized reviews |
-| `performance.read` | View goals and reviews for other employees, scoped to the reporting line (Section 4.5) |
-| `performance.cycles.manage` | Create and configure performance cycles (Section 4.1) |
-| `performance.review` | Submit a manager review for a direct or indirect report |
-| `employee_relations.read.self` | View the status of a case the current user reported or is the subject of, excluding restricted details |
-| `employee_relations.manage` | Create, investigate, and resolve Employee Relations cases (Section 5) |
-| `employee_relations.read` | View cases beyond one's own assigned cases; a narrower, higher-trust grant than most `.read` permissions elsewhere in the platform, given Section 5.4 |
+| `hr.performance.read.self` | View the current user's own goals and finalized reviews |
+| `hr.performance.read` | View goals and reviews for other employees, scoped to the reporting line (Section 4.5) |
+| `hr.performance.cycles.manage` | Create and configure performance cycles (Section 4.1) |
+| `hr.performance.review` | Submit a manager review for a direct or indirect report |
+| `hr.employee_relations.read.self` | View the status of a case the current user reported or is the subject of, excluding restricted details |
+| `hr.employee_relations.manage` | Create, investigate, and resolve Employee Relations cases (Section 5) |
+| `hr.employee_relations.read` | View cases beyond one's own assigned cases; a narrower, higher-trust grant than most `.read` permissions elsewhere in the platform, given Section 5.4 |
 
 The initial Admin role automatically receives every HR permission through `grants_all_permissions`, as with other modules. Every HR API route must declare its permission and follow the existing role-union authorization rule.
 

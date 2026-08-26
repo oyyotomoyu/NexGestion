@@ -75,6 +75,9 @@ func userDatabaseSpec() DatabaseSpec {
 				permission_key TEXT NOT NULL UNIQUE,
 				module TEXT NOT NULL,
 				description TEXT,
+				high_risk INTEGER NOT NULL DEFAULT 0 CHECK (high_risk IN (0, 1)),
+				high_risk_reason TEXT,
+				requires_password INTEGER NOT NULL DEFAULT 0 CHECK (requires_password IN (0, 1)),
 				created_at TEXT NOT NULL
 			)`,
 			`CREATE TABLE IF NOT EXISTS user_roles (
@@ -195,6 +198,15 @@ func syncUserDatabase(ctx context.Context, tx *sql.Tx) error {
 		return err
 	}
 	if err := ensureUserColumn(ctx, tx, "user_groups", "is_primary_organization", "INTEGER NOT NULL DEFAULT 0"); err != nil {
+		return err
+	}
+	if err := ensureUserColumn(ctx, tx, "permissions", "high_risk", "INTEGER NOT NULL DEFAULT 0"); err != nil {
+		return err
+	}
+	if err := ensureUserColumn(ctx, tx, "permissions", "high_risk_reason", "TEXT"); err != nil {
+		return err
+	}
+	if err := ensureUserColumn(ctx, tx, "permissions", "requires_password", "INTEGER NOT NULL DEFAULT 0"); err != nil {
 		return err
 	}
 	// Legacy hierarchical groups become organizations. Standalone legacy groups

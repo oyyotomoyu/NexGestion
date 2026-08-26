@@ -19,10 +19,13 @@ var (
 )
 
 type Permission struct {
-	ID            string  `json:"id"`
-	PermissionKey string  `json:"permission_key"`
-	Module        string  `json:"module"`
-	Description   *string `json:"description"`
+	ID               string  `json:"id"`
+	PermissionKey    string  `json:"permission_key"`
+	Module           string  `json:"module"`
+	Description      *string `json:"description"`
+	HighRisk         bool    `json:"high_risk"`
+	HighRiskReason   *string `json:"high_risk_reason"`
+	RequiresPassword bool    `json:"requires_password"`
 }
 
 type CreateRoleInput struct {
@@ -146,14 +149,14 @@ func getRole(ctx context.Context, db *sql.DB, id string) (*Role, error) {
 	role.GrantsAllPermissions = grantsAll == 1
 	role.Permissions = []Permission{}
 
-	permissionQuery := `SELECT p.id, p.permission_key, p.module, p.description
+	permissionQuery := `SELECT p.id, p.permission_key, p.module, p.description, p.high_risk, p.high_risk_reason, p.requires_password
 		FROM permissions p
 		JOIN role_permissions rp ON rp.permission_id = p.id
 		WHERE rp.role_id = ?
 		ORDER BY p.permission_key`
 	args := []any{id}
 	if role.GrantsAllPermissions {
-		permissionQuery = `SELECT id, permission_key, module, description
+		permissionQuery = `SELECT id, permission_key, module, description, high_risk, high_risk_reason, requires_password
 			FROM permissions ORDER BY permission_key`
 		args = nil
 	}
@@ -164,9 +167,12 @@ func getRole(ctx context.Context, db *sql.DB, id string) (*Role, error) {
 	defer rows.Close()
 	for rows.Next() {
 		var permission Permission
-		if err := rows.Scan(&permission.ID, &permission.PermissionKey, &permission.Module, &permission.Description); err != nil {
+		var highRisk, requiresPassword int
+		if err := rows.Scan(&permission.ID, &permission.PermissionKey, &permission.Module, &permission.Description, &highRisk, &permission.HighRiskReason, &requiresPassword); err != nil {
 			return nil, err
 		}
+		permission.HighRisk = highRisk == 1
+		permission.RequiresPassword = requiresPassword == 1
 		role.Permissions = append(role.Permissions, permission)
 	}
 	return &role, rows.Err()

@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { NavLink, Outlet, useLocation } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 
+import { useAuth } from "@/auth/AuthProvider";
 import { NexSelect } from "@/components/NexSelect";
 import { NexText } from "@/components/NexText";
 import { changeLanguage } from "@/locales/i18n";
@@ -16,6 +17,7 @@ import "./style.css";
 
 export default function AppLayout() {
   const { i18n, t } = useTranslation("ui");
+  const { user } = useAuth();
   const location = useLocation();
   const [menuOpen, setMenuOpen] = useState(false);
   const menuButtonRef = useRef<HTMLButtonElement>(null);
@@ -23,6 +25,12 @@ export default function AppLayout() {
   const menuWasOpen = useRef(false);
   const currentLanguage = i18n.resolvedLanguage ?? null;
   const selectedLanguage = isAppLanguage(currentLanguage) ? currentLanguage : defaultLanguage;
+  const hasPermission = (key: string) =>
+    user?.is_protected === true || user?.roles.some((role) =>
+      role.grants_all_permissions ||
+      role.permissions.some((permission) => permission.permission_key === key),
+    ) === true;
+  const canOpenSettings = ["roles.access", "users.access", "groups.access", "permissions.access"].some(hasPermission);
 
   useEffect(() => {
     setMenuOpen(false);
@@ -100,41 +108,55 @@ export default function AppLayout() {
                 {t("global.k_Nav_Dashboard")}
               </NexText>
             </NavLink>
-            <NavLink to="/notifications" onClick={() => setMenuOpen(false)}>
-              <NexText as="span" variant="label" color="inherit">
-                {t("global.k_Nav_Notifications")}
-              </NexText>
-            </NavLink>
-            <NavLink to="/templates" onClick={() => setMenuOpen(false)}>
-              <NexText as="span" variant="label" color="inherit">
-                {t("global.k_Nav_Templates")}
-              </NexText>
-            </NavLink>
-            <NavLink end to="/attendance" onClick={() => setMenuOpen(false)}>
-              <NexText as="span" variant="label" color="inherit">
-                {t("global.k_Nav_Attendance")}
-              </NexText>
-            </NavLink>
-            <NavLink to="/attendance/approvals" onClick={() => setMenuOpen(false)}>
-              <NexText as="span" variant="label" color="inherit">
-                {t("global.k_Nav_LeaveApprovals")}
-              </NexText>
-            </NavLink>
-            <NavLink end to="/salary" onClick={() => setMenuOpen(false)}>
-              <NexText as="span" variant="label" color="inherit">
-                {t("global.k_Nav_Salary")}
-              </NexText>
-            </NavLink>
-            <NavLink to="/salary/employees" onClick={() => setMenuOpen(false)}>
-              <NexText as="span" variant="label" color="inherit">
-                {t("global.k_Nav_SalaryEmployees")}
-              </NexText>
-            </NavLink>
-            <NavLink to="/settings" onClick={() => setMenuOpen(false)}>
-              <NexText as="span" variant="label" color="inherit">
-                {t("global.k_Nav_Settings")}
-              </NexText>
-            </NavLink>
+            {hasPermission("notifications.access") ? (
+              <NavLink to="/notifications" onClick={() => setMenuOpen(false)}>
+                <NexText as="span" variant="label" color="inherit">
+                  {t("global.k_Nav_Notifications")}
+                </NexText>
+              </NavLink>
+            ) : null}
+            {hasPermission("templates.access") ? (
+              <NavLink to="/templates" onClick={() => setMenuOpen(false)}>
+                <NexText as="span" variant="label" color="inherit">
+                  {t("global.k_Nav_Templates")}
+                </NexText>
+              </NavLink>
+            ) : null}
+            {hasPermission("attendance.access") ? (
+              <>
+                <NavLink end to="/attendance" onClick={() => setMenuOpen(false)}>
+                  <NexText as="span" variant="label" color="inherit">
+                    {t("global.k_Nav_Attendance")}
+                  </NexText>
+                </NavLink>
+                <NavLink to="/attendance/approvals" onClick={() => setMenuOpen(false)}>
+                  <NexText as="span" variant="label" color="inherit">
+                    {t("global.k_Nav_LeaveApprovals")}
+                  </NexText>
+                </NavLink>
+              </>
+            ) : null}
+            {hasPermission("salary.access") ? (
+              <>
+                <NavLink end to="/salary" onClick={() => setMenuOpen(false)}>
+                  <NexText as="span" variant="label" color="inherit">
+                    {t("global.k_Nav_Salary")}
+                  </NexText>
+                </NavLink>
+                <NavLink to="/salary/employees" onClick={() => setMenuOpen(false)}>
+                  <NexText as="span" variant="label" color="inherit">
+                    {t("global.k_Nav_SalaryEmployees")}
+                  </NexText>
+                </NavLink>
+              </>
+            ) : null}
+            {canOpenSettings ? (
+              <NavLink to="/settings" onClick={() => setMenuOpen(false)}>
+                <NexText as="span" variant="label" color="inherit">
+                  {t("global.k_Nav_Settings")}
+                </NexText>
+              </NavLink>
+            ) : null}
           </nav>
         </div>
         <div className="app-sidebar__language">

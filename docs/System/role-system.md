@@ -159,6 +159,8 @@ Create, update, and delete API operations write request-log events containing th
 
 The router authenticates every role request. Role metadata mutations enforce `roles.manage`, and user-role assignment enforces `roles.assign`. Only the protected initial administrator may grant or revoke permissions on a role. A delegated role manager may create, rename, and delete custom roles and may read their assigned permissions, but cannot change what any role grants even if that manager has `permissions.assign`.
 
+When a catalog permission is marked high risk and password-confirmed, granting it to a custom role requires the protected administrator to re-enter their current login password. The UI must show the catalog's risk warning before asking for the password, and the server must reject missing or incorrect passwords with `403 Forbidden`. Revocation does not require password confirmation.
+
 ## 8. Deletion Policy
 
 | Role kind | Can be deleted directly? | Result |

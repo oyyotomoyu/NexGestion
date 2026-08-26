@@ -6,9 +6,17 @@
       "description": "View users and employee profiles"
     },
     {
+      "key": "users.access",
+      "module": "users",
+      "description": "Access the User System"
+    },
+    {
       "key": "users.manage",
       "module": "users",
-      "description": "Create, update, and delete users"
+      "description": "Create, update, and delete users",
+      "high_risk": true,
+      "high_risk_reason": "Can create accounts, disable accounts, and reset administrative user data",
+      "requires_password": true
     },
     {
       "key": "roles.read",
@@ -16,14 +24,25 @@
       "description": "View roles and their assigned permissions"
     },
     {
+      "key": "roles.access",
+      "module": "roles",
+      "description": "Access the Role System"
+    },
+    {
       "key": "roles.manage",
       "module": "roles",
-      "description": "Create, update, and delete custom roles"
+      "description": "Create, update, and delete custom roles",
+      "high_risk": true,
+      "high_risk_reason": "Can create or remove roles that may later receive privileged permissions",
+      "requires_password": true
     },
     {
       "key": "roles.assign",
       "module": "roles",
-      "description": "Assign custom roles to users"
+      "description": "Assign custom roles to users",
+      "high_risk": true,
+      "high_risk_reason": "Can attach privileged roles to users",
+      "requires_password": true
     },
     {
       "key": "permissions.read",
@@ -31,14 +50,27 @@
       "description": "View the permission catalog"
     },
     {
+      "key": "permissions.access",
+      "module": "permissions",
+      "description": "Access the Permission System"
+    },
+    {
       "key": "permissions.assign",
       "module": "permissions",
-      "description": "Assign permissions to custom roles"
+      "description": "Assign permissions to custom roles",
+      "high_risk": true,
+      "high_risk_reason": "Can change what a role is allowed to do across the platform",
+      "requires_password": true
     },
     {
       "key": "groups.read",
       "module": "groups",
       "description": "View groups and group members"
+    },
+    {
+      "key": "groups.access",
+      "module": "groups",
+      "description": "Access the Group System"
     },
     {
       "key": "groups.manage",
@@ -61,6 +93,11 @@
       "description": "View the current user's attendance"
     },
     {
+      "key": "attendance.access",
+      "module": "attendance",
+      "description": "Access the Attendance System"
+    },
+    {
       "key": "attendance.clock.self",
       "module": "attendance",
       "description": "Sign the current user in and out"
@@ -73,7 +110,10 @@
     {
       "key": "attendance.manage",
       "module": "attendance",
-      "description": "Manage attendance and generate reports"
+      "description": "Manage attendance and generate reports",
+      "high_risk": true,
+      "high_risk_reason": "Can correct attendance records and generate official attendance reports",
+      "requires_password": true
     },
     {
       "key": "attendance.reports.read",
@@ -84,6 +124,11 @@
       "key": "notifications.read",
       "module": "notifications",
       "description": "View notifications addressed to the current user"
+    },
+    {
+      "key": "notifications.access",
+      "module": "notifications",
+      "description": "Access the Notification System"
     },
     {
       "key": "notifications.send.own_group",
@@ -103,12 +148,18 @@
     {
       "key": "notifications.manage",
       "module": "notifications",
-      "description": "Manage notification settings, types, retention, expiry, and exports"
+      "description": "Manage notification settings, types, retention, expiry, and exports",
+      "high_risk": true,
+      "high_risk_reason": "Can change notification retention, expiry, and administrative notification behavior",
+      "requires_password": true
     },
     {
       "key": "notifications.export",
       "module": "notifications",
-      "description": "Export notification records by CSV or administrator API"
+      "description": "Export notification records by CSV or administrator API",
+      "high_risk": true,
+      "high_risk_reason": "Can export organization notification records",
+      "requires_password": true
     },
     {
       "key": "notifications.type.info",
@@ -138,7 +189,15 @@
     {
       "key": "reports.manage",
       "module": "reports",
-      "description": "View, download, and delete generated report files"
+      "description": "View, download, and delete generated report files",
+      "high_risk": true,
+      "high_risk_reason": "Can download and delete generated organization reports",
+      "requires_password": true
+    },
+    {
+      "key": "templates.access",
+      "module": "templates",
+      "description": "Access the Template System"
     },
     {
       "key": "templates.read",
@@ -153,7 +212,10 @@
     {
       "key": "templates.manage",
       "module": "templates",
-      "description": "View, download, and delete all template files regardless of visibility; manage storage settings"
+      "description": "View, download, and delete all template files regardless of visibility; manage storage settings",
+      "high_risk": true,
+      "high_risk_reason": "Can view and delete all template files regardless of audience visibility",
+      "requires_password": true
     },
     {
       "key": "salary.read.self",
@@ -161,19 +223,38 @@
       "description": "View the current user's own compensation basis and rate history"
     },
     {
+      "key": "salary.access",
+      "module": "salary",
+      "description": "Access the Salary System"
+    },
+    {
       "key": "salary.read",
       "module": "salary",
-      "description": "View compensation basis and rate history for other employees"
+      "description": "View compensation basis and rate history for other employees",
+      "high_risk": true,
+      "high_risk_reason": "Can view compensation data for other employees",
+      "requires_password": true
     },
     {
       "key": "salary.settlement.configure",
       "module": "salary",
-      "description": "Assign compensation basis, rate, and jurisdiction to employees"
+      "description": "Assign compensation basis, rate, and jurisdiction to employees",
+      "high_risk": true,
+      "high_risk_reason": "Can assign employee compensation basis, rates, and payroll jurisdiction",
+      "requires_password": true
     },
     {
       "key": "approvals.templates.manage",
       "module": "approvals",
-      "description": "Create and configure approval flow templates, their steps, and completion notification targets"
+      "description": "Create and configure approval flow templates, their steps, and completion notification targets",
+      "high_risk": true,
+      "high_risk_reason": "Can change approval routing rules and completion notification targets",
+      "requires_password": true
+    },
+    {
+      "key": "approvals.access",
+      "module": "approvals",
+      "description": "Access the Approval System"
     },
     {
       "key": "approvals.read.self",
@@ -188,12 +269,149 @@
     {
       "key": "approvals.read",
       "module": "approvals",
-      "description": "View approval requests beyond the current user's own submissions and assignments"
+      "description": "View approval requests beyond the current user's own submissions and assignments",
+      "high_risk": true,
+      "high_risk_reason": "Can view approval requests beyond the user's own submissions and assignments",
+      "requires_password": true
     },
     {
       "key": "approvals.reassign",
       "module": "approvals",
-      "description": "Manually assign an approver to a request stuck in requires_assignment"
+      "description": "Manually assign an approver to a request stuck in requires_assignment",
+      "high_risk": true,
+      "high_risk_reason": "Can manually redirect approval responsibility",
+      "requires_password": true
+    },
+    {
+      "key": "checkout.access",
+      "module": "checkout",
+      "description": "Access the Checkout System"
+    },
+    {
+      "key": "crm.access",
+      "module": "crm",
+      "description": "Access the CRM System"
+    },
+    {
+      "key": "finance.access",
+      "module": "finance",
+      "description": "Access the Finance System"
+    },
+    {
+      "key": "general_affairs.access",
+      "module": "general_affairs",
+      "description": "Access the General Affairs System"
+    },
+    {
+      "key": "hr.access",
+      "module": "hr",
+      "description": "Access the HR System"
+    },
+    {
+      "key": "hr.employment.read.self",
+      "module": "hr",
+      "description": "View the current user's own employment history and status"
+    },
+    {
+      "key": "hr.employment.read",
+      "module": "hr",
+      "description": "View employment history and status for other employees",
+      "high_risk": true,
+      "high_risk_reason": "Can view employment history and status for other employees",
+      "requires_password": true
+    },
+    {
+      "key": "hr.employment.manage",
+      "module": "hr",
+      "description": "Record onboarding, probation outcomes, transfers, suspensions, and termination",
+      "high_risk": true,
+      "high_risk_reason": "Can record sensitive employment lifecycle changes including suspension and termination",
+      "requires_password": true
+    },
+    {
+      "key": "hr.tasks.manage",
+      "module": "hr",
+      "description": "Create and update onboarding and offboarding checklist tasks",
+      "high_risk": true,
+      "high_risk_reason": "Can create and update onboarding and offboarding tasks",
+      "requires_password": true
+    },
+    {
+      "key": "hr.performance.read.self",
+      "module": "hr",
+      "description": "View the current user's own goals and finalized reviews"
+    },
+    {
+      "key": "hr.performance.read",
+      "module": "hr",
+      "description": "View goals and reviews for other employees",
+      "high_risk": true,
+      "high_risk_reason": "Can view performance records for other employees",
+      "requires_password": true
+    },
+    {
+      "key": "hr.performance.cycles.manage",
+      "module": "hr",
+      "description": "Create and configure performance cycles",
+      "high_risk": true,
+      "high_risk_reason": "Can configure organization performance review cycles",
+      "requires_password": true
+    },
+    {
+      "key": "hr.performance.review",
+      "module": "hr",
+      "description": "Submit a manager review for a direct or indirect report"
+    },
+    {
+      "key": "hr.employee_relations.read.self",
+      "module": "hr",
+      "description": "View the status of a case the current user reported or is the subject of"
+    },
+    {
+      "key": "hr.employee_relations.manage",
+      "module": "hr",
+      "description": "Create, investigate, and resolve Employee Relations cases",
+      "high_risk": true,
+      "high_risk_reason": "Can create, investigate, and resolve confidential Employee Relations cases",
+      "requires_password": true
+    },
+    {
+      "key": "hr.employee_relations.read",
+      "module": "hr",
+      "description": "View Employee Relations cases beyond the current user's assigned cases",
+      "high_risk": true,
+      "high_risk_reason": "Can view confidential Employee Relations cases beyond assigned cases",
+      "requires_password": true
+    },
+    {
+      "key": "inventory.access",
+      "module": "inventory",
+      "description": "Access the Inventory System"
+    },
+    {
+      "key": "operations.access",
+      "module": "operations",
+      "description": "Access the Operations System"
+    },
+    {
+      "key": "orders.access",
+      "module": "orders",
+      "description": "Access the Order System"
+    },
+    {
+      "key": "procurement.access",
+      "module": "procurement",
+      "description": "Access the Procurement System"
+    },
+    {
+      "key": "production.access",
+      "module": "production",
+      "description": "Access the Production System"
+    },
+    {
+      "key": "scheduling.access",
+      "module": "scheduling",
+      "description": "Access the Scheduling System"
     }
   ]
 }

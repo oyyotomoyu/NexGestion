@@ -26,7 +26,10 @@ The public health, login, and token-refresh endpoints are the only routes that d
 {
   "key": "roles.read",
   "module": "roles",
-  "description": "View roles and their assigned permissions"
+  "description": "View roles and their assigned permissions",
+  "high_risk": false,
+  "high_risk_reason": "",
+  "requires_password": false
 }
 ```
 
@@ -90,7 +93,17 @@ The protected initial administrator can edit a custom role's permissions from th
 
 Only the initial administrator may call these grant/revoke operations. Granting another user `roles.manage` or `permissions.assign` does not let that user edit role grants. Non-admin users with `roles.read` may see the permissions assigned to a role but receive no editing controls.
 
-## 5. Admin Invariants
+Catalog entries may mark a permission as high risk with `high_risk = true`, a human-readable `high_risk_reason`, and `requires_password = true`. When the protected initial administrator grants one of these permissions to a custom role, the client must show a warning and ask for the administrator's current login password. The server verifies that password before inserting the grant. Missing or incorrect passwords return `403 Forbidden`. Revoking a high-risk permission does not require password confirmation because it reduces access.
+
+High-risk permissions include grants that can escalate privileges, manage users or roles, export records, edit payroll/attendance/approval configuration, view broad sensitive employee data, or manage confidential HR employee-relations cases. Examples include `users.manage`, `roles.manage`, `roles.assign`, `permissions.assign`, `salary.read`, `salary.settlement.configure`, `attendance.manage`, `approvals.templates.manage`, and `hr.employee_relations.manage`.
+
+## 5. System Access Permissions
+
+Every documented business system has a module-level `.access` permission in the catalog, for example `hr.access`, `crm.access`, `inventory.access`, and `salary.access`. Administrators use these entries to decide whether a custom role can enter a system at all.
+
+Function-level permissions remain separate and should be checked by APIs that read, create, update, delete, export, approve, or configure data. For example, a small organization may grant `hr.access` to a non-HR role, while still withholding sensitive function permissions until that role actually needs them.
+
+## 6. Admin Invariants
 
 The system Admin role has `grants_all_permissions = true`. Consequently:
 
