@@ -288,14 +288,144 @@
       "description": "Access the Checkout System"
     },
     {
+      "key": "checkout.read",
+      "module": "checkout",
+      "description": "View checkout transactions, payments, and discounts"
+    },
+    {
+      "key": "checkout.sell",
+      "module": "checkout",
+      "description": "Create, update, complete, and void in-progress checkout transactions"
+    },
+    {
+      "key": "checkout.manage",
+      "module": "checkout",
+      "description": "Manage checkout coupons and promotion rules",
+      "high_risk": true,
+      "high_risk_reason": "Can create discounts, vouchers, and promotions that affect checkout totals",
+      "requires_password": true
+    },
+    {
       "key": "crm.access",
       "module": "crm",
       "description": "Access the CRM System"
     },
     {
+      "key": "crm.read",
+      "module": "crm",
+      "description": "View customers, tiers, memberships, price lists, and points balances"
+    },
+    {
+      "key": "crm.manage",
+      "module": "crm",
+      "description": "Create and update customers, tiers, memberships, price lists, and points earning rules",
+      "high_risk": true,
+      "high_risk_reason": "Can change customer records and the pricing tiers that determine what customers are charged",
+      "requires_password": true
+    },
+    {
+      "key": "crm.points.manage",
+      "module": "crm",
+      "description": "Post loyalty points ledger entries (earn, redeem, expire, adjust)",
+      "high_risk": true,
+      "high_risk_reason": "Can credit or debit a customer's loyalty points balance",
+      "requires_password": true
+    },
+    {
       "key": "finance.access",
       "module": "finance",
       "description": "Access the Finance System"
+    },
+    {
+      "key": "accounting.gl.read",
+      "module": "finance",
+      "description": "View journal entries, accounting periods, chart of accounts, and account balances"
+    },
+    {
+      "key": "accounting.gl.manage",
+      "module": "finance",
+      "description": "Manage chart of accounts, accounting periods, and journal entry posting",
+      "high_risk": true,
+      "high_risk_reason": "Can post ledger entries and close accounting periods",
+      "requires_password": true
+    },
+    {
+      "key": "accounting.ap.read",
+      "module": "finance",
+      "description": "View vendors, AP bills, and payment batches"
+    },
+    {
+      "key": "accounting.ap.manage",
+      "module": "finance",
+      "description": "Create and approve vendor bills for payment",
+      "high_risk": true,
+      "high_risk_reason": "Can approve payables that may later be disbursed",
+      "requires_password": true
+    },
+    {
+      "key": "accounting.ap.disburse",
+      "module": "finance",
+      "description": "Execute AP payment batches and generate bank transfer files",
+      "high_risk": true,
+      "high_risk_reason": "Can execute outgoing payment batches",
+      "requires_password": true
+    },
+    {
+      "key": "accounting.expense.read.self",
+      "module": "finance",
+      "description": "View the current user's own expense claims"
+    },
+    {
+      "key": "accounting.expense.submit",
+      "module": "finance",
+      "description": "Submit expense claims"
+    },
+    {
+      "key": "accounting.expense.approve",
+      "module": "finance",
+      "description": "Approve expense claims",
+      "high_risk": true,
+      "high_risk_reason": "Can approve reimbursable expense claims",
+      "requires_password": true
+    },
+    {
+      "key": "accounting.assets.read",
+      "module": "finance",
+      "description": "View fixed-asset records and depreciation"
+    },
+    {
+      "key": "accounting.assets.manage",
+      "module": "finance",
+      "description": "Record fixed-asset acquisitions, depreciation runs, and disposals",
+      "high_risk": true,
+      "high_risk_reason": "Can change fixed-asset accounting records",
+      "requires_password": true
+    },
+    {
+      "key": "accounting.tax.manage",
+      "module": "finance",
+      "description": "Configure jurisdiction tax and accounting-standard packs",
+      "high_risk": true,
+      "high_risk_reason": "Can change statutory accounting and tax configuration",
+      "requires_password": true
+    },
+    {
+      "key": "accounting.reports.read",
+      "module": "finance",
+      "description": "View and export statutory financial statements"
+    },
+    {
+      "key": "finance.budget.read",
+      "module": "finance",
+      "description": "View budgets and budget-vs-actual"
+    },
+    {
+      "key": "finance.budget.manage",
+      "module": "finance",
+      "description": "Create and revise budgets",
+      "high_risk": true,
+      "high_risk_reason": "Can create and revise financial budgets",
+      "requires_password": true
     },
     {
       "key": "general_affairs.access",

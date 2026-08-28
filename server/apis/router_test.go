@@ -32,12 +32,15 @@ func testRouter(t *testing.T) *http.ServeMux {
 	templates := system.NewTemplateService(directory, filepath.Join(t.TempDir(), "template"), users)
 	salary := system.NewSalaryService(directory, users)
 	approvals := system.NewApprovalService(directory, users, notifications)
+	checkout := system.NewCheckoutService(directory, users)
+	crm := system.NewCRMService(directory)
+	finance := system.NewFinanceService(directory, users)
 	logService, err := applogs.NewService(t.TempDir(), time.UTC)
 	if err != nil {
 		t.Fatal(err)
 	}
 	t.Cleanup(logService.Close)
-	InitRouter(router, users, attendance, notifications, reports, templates, salary, approvals, system.NewAuthService(users), logService)
+	InitRouter(router, users, attendance, notifications, reports, templates, salary, approvals, checkout, crm, finance, system.NewAuthService(users), logService)
 	return router
 }
 
@@ -1086,6 +1089,223 @@ func TestSalaryCompensationRecordAPI(t *testing.T) {
 	}
 	if len(listBody.CompensationRecords) != 1 || listBody.CompensationRecords[0].ID != record.ID {
 		t.Fatalf("expected one compensation record, got %+v", listBody.CompensationRecords)
+	}
+}
+
+func TestCRMAPI(t *testing.T) {
+	router := testRouter(t)
+	adminToken, _ := loginForTest(t, router)
+
+	priceListResponse := serveAuthorized(router, http.MethodPost, "/api/crm/price-lists", []byte(`{"name":"Retail 2026","currency":"twd"}`), adminToken)
+	if priceListResponse.Code != http.StatusCreated {
+		t.Fatalf("create price list: %d %s", priceListResponse.Code, priceListResponse.Body.String())
+	}
+	var priceList system.CRMPriceList
+	if err := json.NewDecoder(priceListResponse.Body).Decode(&priceList); err != nil {
+		t.Fatal(err)
+	}
+	if priceList.Currency != "TWD" || priceList.Status != "active" || len(priceList.Items) != 0 {
+		t.Fatalf("unexpected price list: %+v", priceList)
+	}
+
+	itemResponse := serveAuthorized(router, http.MethodPost, "/api/crm/price-lists/"+priceList.ID+"/items",
+		[]byte(`{"description":"Widget","unit_price":"199.5"}`), adminToken)
+	if itemResponse.Code != http.StatusCreated {
+		t.Fatalf("add price list item: %d %s", itemResponse.Code, itemResponse.Body.String())
+	}
+	var withItem system.CRMPriceList
+	if err := json.NewDecoder(itemResponse.Body).Decode(&withItem); err != nil {
+		t.Fatal(err)
+	}
+	if len(withItem.Items) != 1 || withItem.Items[0].UnitPrice != "199.5" {
+		t.Fatalf("unexpected price list after adding item: %+v", withItem)
+	}
+
+	tierResponse := serveAuthorized(router, http.MethodPost, "/api/crm/customer-tiers",
+		[]byte(`{"name":"Distributor","default_price_list_id":"`+priceList.ID+`"}`), adminToken)
+	if tierResponse.Code != http.StatusCreated {
+		t.Fatalf("create customer tier: %d %s", tierResponse.Code, tierResponse.Body.String())
+	}
+	var customerTier system.CRMCustomerTier
+	if err := json.NewDecoder(tierResponse.Body).Decode(&customerTier); err != nil {
+		t.Fatal(err)
+	}
+
+	badTierResponse := serveAuthorized(router, http.MethodPost, "/api/crm/customer-tiers",
+		[]byte(`{"name":"Bad","default_price_list_id":"does-not-exist"}`), adminToken)
+	if badTierResponse.Code != http.StatusBadRequest {
+		t.Fatalf("customer tier with unknown price list: expected %d, got %d %s", http.StatusBadRequest, badTierResponse.Code, badTierResponse.Body.String())
+	}
+
+	customerResponse := serveAuthorized(router, http.MethodPost, "/api/crm/customers", []byte(`{
+		"party_type":"organization",
+		"segment":"b2b",
+		"name":"Acme Trading Co",
+		"contact_email":"purchasing@acme.example",
+		"tier_id":"`+customerTier.ID+`"
+	}`), adminToken)
+	if customerResponse.Code != http.StatusCreated {
+		t.Fatalf("create customer: %d %s", customerResponse.Code, customerResponse.Body.String())
+	}
+	var customer system.CRMCustomer
+	if err := json.NewDecoder(customerResponse.Body).Decode(&customer); err != nil {
+		t.Fatal(err)
+	}
+	if customer.PartyType != "organization" || customer.Segment != "b2b" || customer.TierID == nil || *customer.TierID != customerTier.ID {
+		t.Fatalf("unexpected customer: %+v", customer)
+	}
+
+	updateResponse := serveAuthorized(router, http.MethodPatch, "/api/crm/customers/"+customer.ID,
+		[]byte(`{"status":"inactive","contact_phone":"0912-345-678"}`), adminToken)
+	if updateResponse.Code != http.StatusOK {
+		t.Fatalf("update customer: %d %s", updateResponse.Code, updateResponse.Body.String())
+	}
+	var updatedCustomer system.CRMCustomer
+	if err := json.NewDecoder(updateResponse.Body).Decode(&updatedCustomer); err != nil {
+		t.Fatal(err)
+	}
+	if updatedCustomer.Status != "inactive" || updatedCustomer.ContactPhone == nil || *updatedCustomer.ContactPhone != "0912-345-678" {
+		t.Fatalf("unexpected updated customer: %+v", updatedCustomer)
+	}
+
+	membershipTierResponse := serveAuthorized(router, http.MethodPost, "/api/crm/membership-tiers", []byte(`{"name":"金卡會員"}`), adminToken)
+	if membershipTierResponse.Code != http.StatusCreated {
+		t.Fatalf("create membership tier: %d %s", membershipTierResponse.Code, membershipTierResponse.Body.String())
+	}
+	var membershipTier system.CRMMembershipTier
+	if err := json.NewDecoder(membershipTierResponse.Body).Decode(&membershipTier); err != nil {
+		t.Fatal(err)
+	}
+
+	membershipResponse := serveAuthorized(router, http.MethodPost, "/api/crm/memberships", []byte(`{
+		"customer_id":"`+customer.ID+`",
+		"membership_tier_id":"`+membershipTier.ID+`",
+		"member_number":"MEM-0001",
+		"joined_at":"2026-01-01"
+	}`), adminToken)
+	if membershipResponse.Code != http.StatusCreated {
+		t.Fatalf("create membership: %d %s", membershipResponse.Code, membershipResponse.Body.String())
+	}
+	var membership system.CRMMembership
+	if err := json.NewDecoder(membershipResponse.Body).Decode(&membership); err != nil {
+		t.Fatal(err)
+	}
+	if membership.MemberNumber == nil || *membership.MemberNumber != "MEM-0001" || membership.Status != "active" {
+		t.Fatalf("unexpected membership: %+v", membership)
+	}
+
+	duplicateResponse := serveAuthorized(router, http.MethodPost, "/api/crm/memberships", []byte(`{
+		"customer_id":"`+customer.ID+`",
+		"membership_tier_id":"`+membershipTier.ID+`",
+		"member_number":"MEM-0001",
+		"joined_at":"2026-01-02"
+	}`), adminToken)
+	if duplicateResponse.Code != http.StatusBadRequest {
+		t.Fatalf("duplicate member_number: expected %d, got %d %s", http.StatusBadRequest, duplicateResponse.Code, duplicateResponse.Body.String())
+	}
+
+	resolveResponse := serveAuthorized(router, http.MethodGet, "/api/crm/memberships/resolve?member_number=MEM-0001", nil, adminToken)
+	if resolveResponse.Code != http.StatusOK {
+		t.Fatalf("resolve member number: %d %s", resolveResponse.Code, resolveResponse.Body.String())
+	}
+	var resolved system.CRMMembership
+	if err := json.NewDecoder(resolveResponse.Body).Decode(&resolved); err != nil {
+		t.Fatal(err)
+	}
+	if resolved.ID != membership.ID {
+		t.Fatalf("resolve returned wrong membership: %+v", resolved)
+	}
+	missingResolve := serveAuthorized(router, http.MethodGet, "/api/crm/memberships/resolve?member_number=NOPE", nil, adminToken)
+	if missingResolve.Code != http.StatusNotFound {
+		t.Fatalf("resolve unknown member number: expected %d, got %d", http.StatusNotFound, missingResolve.Code)
+	}
+
+	ruleResponse := serveAuthorized(router, http.MethodPost, "/api/crm/points-earning-rules", []byte(`{
+		"membership_tier_id":"`+membershipTier.ID+`",
+		"points_per_currency_unit":"1"
+	}`), adminToken)
+	if ruleResponse.Code != http.StatusCreated {
+		t.Fatalf("create points earning rule: %d %s", ruleResponse.Code, ruleResponse.Body.String())
+	}
+
+	earnResponse := serveAuthorized(router, http.MethodPost, "/api/crm/points-ledger", []byte(`{
+		"customer_id":"`+customer.ID+`",
+		"points_delta":100,
+		"entry_type":"earned",
+		"source_module":"checkout"
+	}`), adminToken)
+	if earnResponse.Code != http.StatusCreated {
+		t.Fatalf("post earned points: %d %s", earnResponse.Code, earnResponse.Body.String())
+	}
+	redeemResponse := serveAuthorized(router, http.MethodPost, "/api/crm/points-ledger", []byte(`{
+		"customer_id":"`+customer.ID+`",
+		"points_delta":-30,
+		"entry_type":"redeemed",
+		"source_module":"checkout"
+	}`), adminToken)
+	if redeemResponse.Code != http.StatusCreated {
+		t.Fatalf("post redeemed points: %d %s", redeemResponse.Code, redeemResponse.Body.String())
+	}
+
+	balanceResponse := serveAuthorized(router, http.MethodGet, "/api/crm/customers/"+customer.ID+"/points/balance", nil, adminToken)
+	if balanceResponse.Code != http.StatusOK {
+		t.Fatalf("get points balance: %d %s", balanceResponse.Code, balanceResponse.Body.String())
+	}
+	var balance system.CRMPointsBalance
+	if err := json.NewDecoder(balanceResponse.Body).Decode(&balance); err != nil {
+		t.Fatal(err)
+	}
+	if balance.Balance != 70 {
+		t.Fatalf("expected balance 70, got %+v", balance)
+	}
+
+	ledgerResponse := serveAuthorized(router, http.MethodGet, "/api/crm/customers/"+customer.ID+"/points/ledger", nil, adminToken)
+	if ledgerResponse.Code != http.StatusOK {
+		t.Fatalf("list points ledger: %d %s", ledgerResponse.Code, ledgerResponse.Body.String())
+	}
+	var ledgerBody struct {
+		PointsLedger []system.CRMPointsLedgerEntry `json:"points_ledger"`
+	}
+	if err := json.NewDecoder(ledgerResponse.Body).Decode(&ledgerBody); err != nil {
+		t.Fatal(err)
+	}
+	if len(ledgerBody.PointsLedger) != 2 {
+		t.Fatalf("expected 2 ledger entries, got %+v", ledgerBody.PointsLedger)
+	}
+
+	// crm.read is required for read endpoints and crm.manage for mutations;
+	// neither grants the other.
+	roleResponse := serveAuthorized(router, http.MethodPost, "/api/roles", []byte(`{"title":"CRM Reader"}`), adminToken)
+	var role system.Role
+	if err := json.NewDecoder(roleResponse.Body).Decode(&role); err != nil {
+		t.Fatal(err)
+	}
+	if response := serveAuthorized(router, http.MethodPut, "/api/roles/"+role.ID+"/permissions/crm.read", nil, adminToken); response.Code != http.StatusNoContent {
+		t.Fatalf("grant crm.read: %d %s", response.Code, response.Body.String())
+	}
+	readerUserResponse := serveAuthorized(router, http.MethodPost, "/api/users", []byte(`{"display_name":"CRM Reader","email":"crm-reader@example.com","password":"a-secure-user-password"}`), adminToken)
+	var readerUser system.User
+	if err := json.NewDecoder(readerUserResponse.Body).Decode(&readerUser); err != nil {
+		t.Fatal(err)
+	}
+	if response := serveAuthorized(router, http.MethodPut, "/api/roles/"+role.ID+"/users/"+readerUser.ID, nil, adminToken); response.Code != http.StatusNoContent {
+		t.Fatalf("assign crm reader role: %d %s", response.Code, response.Body.String())
+	}
+	readerLogin := serve(router, http.MethodPost, "/api/auth/login", []byte(`{"email":"crm-reader@example.com","password":"a-secure-user-password"}`))
+	var readerTokens struct {
+		AccessToken string `json:"access_token"`
+	}
+	if err := json.NewDecoder(readerLogin.Body).Decode(&readerTokens); err != nil {
+		t.Fatal(err)
+	}
+	if response := serveAuthorized(router, http.MethodGet, "/api/crm/customers", nil, readerTokens.AccessToken); response.Code != http.StatusOK {
+		t.Fatalf("reader list customers: expected %d, got %d %s", http.StatusOK, response.Code, response.Body.String())
+	}
+	if response := serveAuthorized(router, http.MethodPost, "/api/crm/customers", []byte(`{"party_type":"individual","segment":"b2c","name":"Denied"}`), readerTokens.AccessToken); response.Code != http.StatusForbidden {
+		t.Fatalf("reader create customer: expected %d, got %d %s", http.StatusForbidden, response.Code, response.Body.String())
+	}
+	if response := serveAuthorized(router, http.MethodPost, "/api/crm/points-ledger", []byte(`{"customer_id":"`+customer.ID+`","points_delta":10,"entry_type":"adjustment"}`), readerTokens.AccessToken); response.Code != http.StatusForbidden {
+		t.Fatalf("reader post points ledger: expected %d, got %d %s", http.StatusForbidden, response.Code, response.Body.String())
 	}
 }
 

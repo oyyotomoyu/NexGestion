@@ -46,6 +46,9 @@ var RequiredDatabases = []DatabaseSpec{
 	templateDatabaseSpec(),
 	salaryDatabaseSpec(),
 	approvalDatabaseSpec(),
+	checkoutDatabaseSpec(),
+	crmDatabaseSpec(),
+	financeDatabaseSpec(),
 }
 
 // syncSystemSettingsDefaults inserts default settings that were added after a

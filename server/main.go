@@ -56,7 +56,10 @@ func main() {
 	}
 	salary := system.NewSalaryService(databaseDirectory, users)
 	approvals := system.NewApprovalService(databaseDirectory, users, notifications)
-	apis.InitRouter(mux, users, attendance, notifications, reports, templates, salary, approvals, system.NewAuthService(users), logService)
+	checkout := system.NewCheckoutService(databaseDirectory, users)
+	crm := system.NewCRMService(databaseDirectory)
+	finance := system.NewFinanceService(databaseDirectory, users)
+	apis.InitRouter(mux, users, attendance, notifications, reports, templates, salary, approvals, checkout, crm, finance, system.NewAuthService(users), logService)
 	go runAttendanceMaintenance(attendance, logService)
 	go runNotificationMaintenance(notifications, logService)
 	mux.Handle("/", spaHandler(distDir))
