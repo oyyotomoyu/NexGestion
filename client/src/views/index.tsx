@@ -5,6 +5,8 @@ import { useAuth } from "@/auth/AuthProvider";
 import AppLayout from "@/layouts/AppLayout";
 import Attendance from "@/views/Attendance";
 import AttendanceApprovals from "@/views/AttendanceApprovals";
+import Approvals from "@/views/Approvals";
+import ApprovalsManage from "@/views/Approvals/Manage";
 import Dashboard from "@/views/Dashboard";
 import Login from "@/views/Login";
 import Notifications from "@/views/Notifications";
@@ -66,6 +68,14 @@ const routes: RouteObject[] = [
       {
         path: "notifications",
         element: <ProtectedRoute permission="notifications.access"><Notifications /></ProtectedRoute>,
+      },
+      {
+        path: "approvals",
+        element: <ProtectedRoute permission="approvals.access"><Approvals /></ProtectedRoute>,
+      },
+      {
+        path: "approvals/manage",
+        element: <ProtectedRoute permission="approvals.access"><ApprovalsManage /></ProtectedRoute>,
       },
       {
         path: "salary",

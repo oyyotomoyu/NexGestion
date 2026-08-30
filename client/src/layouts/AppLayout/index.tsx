@@ -122,6 +122,13 @@ export default function AppLayout() {
                 </NexText>
               </NavLink>
             ) : null}
+            {hasPermission("approvals.access") ? (
+              <NavLink end to="/approvals" onClick={() => setMenuOpen(false)}>
+                <NexText as="span" variant="label" color="inherit">
+                  {t("global.k_Nav_Approvals")}
+                </NexText>
+              </NavLink>
+            ) : null}
             {hasPermission("attendance.access") ? (
               <>
                 <NavLink end to="/attendance" onClick={() => setMenuOpen(false)}>
