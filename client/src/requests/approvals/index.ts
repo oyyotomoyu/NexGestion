@@ -71,7 +71,9 @@ function nextStepOrder(template: ApprovalFlowTemplate) {
 }
 
 export async function listFlowTemplates(query: ListQuery = {}) {
-  if (import.meta.env.DEV) return [...mockTemplates];
+  if (process.env.NODE_ENV !== "production") {
+    return [...mockTemplates];
+  }
   const response = await request<ListResponse<ApprovalFlowTemplate, "flow_templates">>(
     buildListPath("/api/approvals/templates", { sort: "created_at", order: "desc", page_size: 100, ...query }),
   );
@@ -79,7 +81,7 @@ export async function listFlowTemplates(query: ListQuery = {}) {
 }
 
 export function getFlowTemplate(id: string) {
-  if (import.meta.env.DEV) {
+  if (process.env.NODE_ENV !== "production") {
     const template = mockTemplates.find((item) => item.id === id);
     return template ? Promise.resolve({ ...template }) : Promise.reject(new Error("Flow template not found"));
   }
@@ -87,7 +89,7 @@ export function getFlowTemplate(id: string) {
 }
 
 export function createFlowTemplate(input: CreateFlowTemplateInput) {
-  if (import.meta.env.DEV) {
+  if (process.env.NODE_ENV !== "production") {
     const id = crypto.randomUUID();
     const template: ApprovalFlowTemplate = {
       id,
@@ -125,7 +127,7 @@ export function createFlowTemplate(input: CreateFlowTemplateInput) {
 }
 
 export function updateFlowTemplate(id: string, input: UpdateFlowTemplateInput) {
-  if (import.meta.env.DEV) {
+  if (process.env.NODE_ENV !== "production") {
     const index = mockTemplates.findIndex((item) => item.id === id);
     if (index < 0) return Promise.reject(new Error("Flow template not found"));
     const current = mockTemplates[index];
@@ -167,7 +169,7 @@ export function updateFlowTemplate(id: string, input: UpdateFlowTemplateInput) {
 }
 
 export function deleteFlowTemplate(id: string) {
-  if (import.meta.env.DEV) {
+  if (process.env.NODE_ENV !== "production") {
     if (mockRequests.some((item) => item.flow_template_id === id)) {
       return Promise.reject(new Error("Flow template is in use"));
     }
@@ -178,7 +180,7 @@ export function deleteFlowTemplate(id: string) {
 }
 
 export function submitApprovalRequest(input: SubmitApprovalRequestInput) {
-  if (import.meta.env.DEV) {
+  if (process.env.NODE_ENV !== "production") {
     const template = mockTemplates.find((item) => item.id === input.flow_template_id);
     if (!template) return Promise.reject(new Error("Flow template not found"));
     const firstStep = template.steps[0] ?? null;
@@ -219,7 +221,9 @@ export function submitApprovalRequest(input: SubmitApprovalRequestInput) {
 }
 
 export async function listApprovalRequests(query: ListQuery = {}) {
-  if (import.meta.env.DEV) return [...mockRequests];
+  if (process.env.NODE_ENV !== "production") {
+    return [...mockRequests];
+  }
   const response = await request<ListResponse<ApprovalRequest, "approval_requests">>(
     buildListPath("/api/approvals/requests", { sort: "created_at", order: "desc", page_size: 100, ...query }),
   );
@@ -227,7 +231,9 @@ export async function listApprovalRequests(query: ListQuery = {}) {
 }
 
 export async function listMyApprovalRequests(query: ListQuery = {}) {
-  if (import.meta.env.DEV) return mockRequests.filter((item) => item.requested_by_user_id === CURRENT_USER_ID);
+  if (process.env.NODE_ENV !== "production") {
+    return mockRequests.filter((item) => item.requested_by_user_id === CURRENT_USER_ID);
+  }
   const response = await request<ListResponse<ApprovalRequest, "approval_requests">>(
     buildListPath("/api/approvals/me/requests", { sort: "created_at", order: "desc", page_size: 100, ...query }),
   );
@@ -235,7 +241,7 @@ export async function listMyApprovalRequests(query: ListQuery = {}) {
 }
 
 export async function listMyApprovalAssignments(query: ListQuery = {}) {
-  if (import.meta.env.DEV) {
+  if (process.env.NODE_ENV !== "production") {
     return mockRequests.filter((item) =>
       item.steps.some((step) => step.decision === "pending" && step.assigned_user_ids.includes(CURRENT_USER_ID)),
     );
@@ -247,7 +253,7 @@ export async function listMyApprovalAssignments(query: ListQuery = {}) {
 }
 
 export function getApprovalRequest(id: string) {
-  if (import.meta.env.DEV) {
+  if (process.env.NODE_ENV !== "production") {
     const found = mockRequests.find((item) => item.id === id);
     return found ? Promise.resolve({ ...found }) : Promise.reject(new Error("Approval request not found"));
   }
@@ -255,7 +261,7 @@ export function getApprovalRequest(id: string) {
 }
 
 export function cancelApprovalRequest(id: string) {
-  if (import.meta.env.DEV) {
+  if (process.env.NODE_ENV !== "production") {
     const index = mockRequests.findIndex((item) => item.id === id);
     if (index < 0) return Promise.reject(new Error("Approval request not found"));
     const updated: ApprovalRequest = { ...mockRequests[index], status: "cancelled", completed_at: nowISO() };
@@ -266,7 +272,7 @@ export function cancelApprovalRequest(id: string) {
 }
 
 export function decideApprovalRequest(id: string, input: DecideApprovalInput) {
-  if (import.meta.env.DEV) {
+  if (process.env.NODE_ENV !== "production") {
     const index = mockRequests.findIndex((item) => item.id === id);
     if (index < 0) return Promise.reject(new Error("Approval request not found"));
     const current = mockRequests[index];
@@ -319,7 +325,7 @@ export function decideApprovalRequest(id: string, input: DecideApprovalInput) {
 }
 
 export function reassignApprovalRequest(id: string, input: ReassignApprovalInput) {
-  if (import.meta.env.DEV) {
+  if (process.env.NODE_ENV !== "production") {
     const index = mockRequests.findIndex((item) => item.id === id);
     if (index < 0) return Promise.reject(new Error("Approval request not found"));
     const current = mockRequests[index];

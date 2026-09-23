@@ -56,8 +56,8 @@ func main() {
 	}
 	salary := system.NewSalaryService(databaseDirectory, users)
 	approvals := system.NewApprovalService(databaseDirectory, users, notifications)
-	checkout := system.NewCheckoutService(databaseDirectory, users)
 	crm := system.NewCRMService(databaseDirectory)
+	checkout := system.NewCheckoutService(databaseDirectory, users, crm)
 	finance := system.NewFinanceService(databaseDirectory, users)
 	apis.InitRouter(mux, users, attendance, notifications, reports, templates, salary, approvals, checkout, crm, finance, system.NewAuthService(users), logService)
 	go runAttendanceMaintenance(attendance, logService)

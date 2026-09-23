@@ -83,12 +83,14 @@ function getMockToday() {
 }
 
 export async function getAttendanceToday() {
-  if (import.meta.env.DEV) return getMockToday();
+  if (process.env.NODE_ENV !== "production") {
+    return getMockToday();
+  }
   return request<AttendanceDay>("/api/attendance/today");
 }
 
 export async function signInAttendance() {
-  if (import.meta.env.DEV) {
+  if (process.env.NODE_ENV !== "production") {
     const day = await getMockToday();
     if (day.status === "working") return day;
     mockToday = {
@@ -112,7 +114,7 @@ export async function signInAttendance() {
 }
 
 export async function signOutAttendance() {
-  if (import.meta.env.DEV) {
+  if (process.env.NODE_ENV !== "production") {
     const day = await getMockToday();
     if (day.status === "non_working") return day;
     const endedAt = nowISO();
@@ -135,7 +137,7 @@ export async function signOutAttendance() {
 }
 
 export async function listAttendanceDays(month: string, query: ListQuery = {}) {
-  if (import.meta.env.DEV) {
+  if (process.env.NODE_ENV !== "production") {
     const day = await getMockToday();
     return day.attendance_date.startsWith(month) ? [day] : [];
   }
@@ -146,7 +148,7 @@ export async function listAttendanceDays(month: string, query: ListQuery = {}) {
 }
 
 export async function getSelfAttendanceMonthlyReport(month: string) {
-  if (import.meta.env.DEV) {
+  if (process.env.NODE_ENV !== "production") {
     const days = await listAttendanceDays(month);
     const workedMinutes = days.reduce((total, day) => total + day.worked_minutes, 0);
     return {
@@ -171,7 +173,7 @@ export async function getSelfAttendanceMonthlyReport(month: string) {
 }
 
 export async function generateAttendanceReport(month: string) {
-  if (import.meta.env.DEV) {
+  if (process.env.NODE_ENV !== "production") {
     return {
       report_month: month,
       relative_path: `attendance-${month}.csv`,
@@ -191,13 +193,17 @@ export function attendanceCSVURL(month: string) {
 }
 
 export async function getLeaveTypes() {
-  if (import.meta.env.DEV) return mockLeaveTypes;
+  if (process.env.NODE_ENV !== "production") {
+    return mockLeaveTypes;
+  }
   const response = await request<{ leave_types: LeaveType[] }>("/api/attendance/leave-types");
   return response.leave_types;
 }
 
 export async function listLeaveRequests(query: ListQuery = {}) {
-  if (import.meta.env.DEV) return [...mockLeaveRequests];
+  if (process.env.NODE_ENV !== "production") {
+    return [...mockLeaveRequests];
+  }
   const response = await request<ListResponse<LeaveRequest, "leave_requests">>(
     buildListPath("/api/attendance/leave-requests", { sort: "created_at", order: "desc", page_size: 100, ...query }),
   );
@@ -205,7 +211,7 @@ export async function listLeaveRequests(query: ListQuery = {}) {
 }
 
 export async function applyLeave(input: ApplyLeaveInput) {
-  if (import.meta.env.DEV) {
+  if (process.env.NODE_ENV !== "production") {
     const now = nowISO();
     const request: LeaveRequest = {
       id: crypto.randomUUID(),
@@ -239,7 +245,9 @@ export async function applyLeave(input: ApplyLeaveInput) {
 }
 
 export async function listLeaveApprovals(query: ListQuery = {}) {
-  if (import.meta.env.DEV) return [...mockLeaveApprovals];
+  if (process.env.NODE_ENV !== "production") {
+    return [...mockLeaveApprovals];
+  }
   const response = await request<ListResponse<LeaveApprovalRequest, "leave_requests">>(
     buildListPath("/api/attendance/leave-approvals", { sort: "created_at", order: "desc", page_size: 100, ...query }),
   );
@@ -247,7 +255,7 @@ export async function listLeaveApprovals(query: ListQuery = {}) {
 }
 
 export async function decideLeave(id: string, input: DecideLeaveInput) {
-  if (import.meta.env.DEV) {
+  if (process.env.NODE_ENV !== "production") {
     const current = mockLeaveApprovals.find((item) => item.id === id);
     if (!current) throw new Error("Leave request not found");
     const updated = { ...current, status: input.decision, updated_at: nowISO() };

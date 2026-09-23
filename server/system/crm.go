@@ -5,6 +5,8 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"math"
+	"math/big"
 	"path/filepath"
 	"regexp"
 	"strings"
@@ -1393,6 +1395,78 @@ func (s *CRMService) ListPointsLedger(ctx context.Context, customerID string, qu
 		items = append(items, item)
 	}
 	return NewListResult(items, normalized, total), rows.Err()
+}
+
+// EarnPointsForCheckout posts an "earned" Points Ledger entry (crm-system.md
+// §2.5) for a completed Checkout transaction, sized by the customer's
+// applicable Points Earning Rule (§2.5.1) against totalAmount. It returns
+// (nil, nil) — not an error — when no active rule applies to this customer
+// or the resolved amount rounds to zero points, since an unconfigured rate
+// simply means no points accrue.
+func (s *CRMService) EarnPointsForCheckout(ctx context.Context, customerID, totalAmount, checkoutTransactionID string) (*CRMPointsLedgerEntry, error) {
+	rate, err := s.resolveEarningRate(ctx, customerID)
+	if err != nil || rate == nil {
+		return nil, err
+	}
+	total, ok := new(big.Rat).SetString(strings.TrimSpace(totalAmount))
+	if !ok {
+		return nil, fmt.Errorf("%w: total_amount must be a decimal", ErrCRMInvalid)
+	}
+	pointsFloat, _ := new(big.Rat).Mul(total, rate).Float64()
+	points := int(math.Round(pointsFloat))
+	if points <= 0 {
+		return nil, nil
+	}
+	return s.PostPointsLedgerEntry(ctx, PostCRMPointsLedgerEntryInput{
+		CustomerID:        customerID,
+		PointsDelta:       points,
+		EntryType:         "earned",
+		SourceModule:      "checkout",
+		SourceReferenceID: checkoutTransactionID,
+	})
+}
+
+// resolveEarningRate finds the Points Earning Rule (§2.5.1) that applies to
+// customerID: the rule scoped to their current active membership's tier when
+// one matches, otherwise the tier-unset default rule. Returns (nil, nil)
+// when no active membership or no matching rule exists.
+func (s *CRMService) resolveEarningRate(ctx context.Context, customerID string) (*big.Rat, error) {
+	db, err := s.open()
+	if err != nil {
+		return nil, err
+	}
+	defer db.Close()
+	var membershipTierID sql.NullString
+	err = db.QueryRowContext(ctx, `SELECT membership_tier_id FROM crm_memberships
+		WHERE customer_id=? AND status='active' ORDER BY joined_at DESC, created_at DESC LIMIT 1`, customerID).Scan(&membershipTierID)
+	if err != nil && !errors.Is(err, sql.ErrNoRows) {
+		return nil, err
+	}
+	if membershipTierID.Valid {
+		rate, err := queryEarningRate(ctx, db, `SELECT points_per_currency_unit FROM crm_points_earning_rules
+			WHERE membership_tier_id=? AND status='active' LIMIT 1`, membershipTierID.String)
+		if err != nil || rate != nil {
+			return rate, err
+		}
+	}
+	return queryEarningRate(ctx, db, `SELECT points_per_currency_unit FROM crm_points_earning_rules
+		WHERE membership_tier_id IS NULL AND status='active' LIMIT 1`)
+}
+
+func queryEarningRate(ctx context.Context, db *sql.DB, query string, args ...any) (*big.Rat, error) {
+	var rateText string
+	err := db.QueryRowContext(ctx, query, args...).Scan(&rateText)
+	if errors.Is(err, sql.ErrNoRows) {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	rate, ok := new(big.Rat).SetString(rateText)
+	if !ok {
+		return nil, fmt.Errorf("%w: stored points_per_currency_unit is not a valid decimal", ErrCRMInvalid)
+	}
+	return rate, nil
 }
 
 // --- Shared helpers ---

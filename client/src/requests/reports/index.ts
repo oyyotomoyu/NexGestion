@@ -12,7 +12,9 @@ let mockFiles: ReportFile[] = [
 ];
 
 export async function listReportFiles(query: ListQuery = {}) {
-  if (import.meta.env.DEV) return [...mockFiles];
+  if (process.env.NODE_ENV !== "production") {
+    return [...mockFiles];
+  }
   const response = await request<ListResponse<ReportFile, "files">>(
     buildListPath("/api/reports/files", { sort: "modified_at", order: "desc", page_size: 100, ...query }),
   );
@@ -27,7 +29,7 @@ export function reportFileDownloadURL(path: string) {
 }
 
 export function deleteReportFile(path: string) {
-  if (import.meta.env.DEV) {
+  if (process.env.NODE_ENV !== "production") {
     mockFiles = mockFiles.filter((file) => file.path !== path);
     return Promise.resolve();
   }

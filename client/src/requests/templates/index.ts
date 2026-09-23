@@ -24,7 +24,9 @@ let mockFiles: TemplateFile[] = [
 ];
 
 export async function listTemplates(query: ListQuery = {}) {
-  if (import.meta.env.DEV) return [...mockFiles];
+  if (process.env.NODE_ENV !== "production") {
+    return [...mockFiles];
+  }
   const response = await request<ListResponse<TemplateFile, "templates">>(
     buildListPath("/api/templates", { sort: "created_at", order: "desc", page_size: 100, ...query }),
   );
@@ -36,7 +38,7 @@ export function templateDownloadURL(id: string) {
 }
 
 export async function uploadTemplate(input: UploadTemplateInput) {
-  if (import.meta.env.DEV) {
+  if (process.env.NODE_ENV !== "production") {
     const created: TemplateFile = {
       id: `mock-template-${mockFiles.length + 1}`,
       original_filename: input.file.name,
@@ -66,7 +68,7 @@ export async function uploadTemplate(input: UploadTemplateInput) {
 }
 
 export function deleteTemplate(id: string) {
-  if (import.meta.env.DEV) {
+  if (process.env.NODE_ENV !== "production") {
     mockFiles = mockFiles.filter((file) => file.id !== id);
     return Promise.resolve();
   }
@@ -74,7 +76,7 @@ export function deleteTemplate(id: string) {
 }
 
 export function getTemplateStorageUsage() {
-  if (import.meta.env.DEV) {
+  if (process.env.NODE_ENV !== "production") {
     const used = mockFiles.reduce((total, file) => total + file.size_bytes, 0);
     const usage: TemplateStorageUsage = {
       used_bytes: used,

@@ -489,7 +489,7 @@ let mockUsers: User[] = [
 ];
 
 export async function listUsers(query: ListQuery = {}) {
-  if (import.meta.env.DEV) {
+  if (process.env.NODE_ENV !== "production") {
     return mockUsers;
   }
 
@@ -500,7 +500,7 @@ export async function listUsers(query: ListQuery = {}) {
 }
 
 export function getUser(id: string) {
-  if (import.meta.env.DEV) {
+  if (process.env.NODE_ENV !== "production") {
     const user =
       mockUsers.find((mockUser) => mockUser.id === id) ??
       mockUsers[Number(id)];
@@ -516,7 +516,7 @@ export function getUser(id: string) {
 }
 
 export function createUser(input: CreateUserInput) {
-  if (import.meta.env.DEV) {
+  if (process.env.NODE_ENV !== "production") {
     const now=new Date().toISOString();const user:User={id:crypto.randomUUID(),display_name:input.display_name.trim(),email:input.email.trim().toLowerCase(),status:input.status||"active",locale:input.locale||null,timezone:input.timezone||null,must_change_password:input.must_change_password??true,failed_login_count:0,locked_until:null,last_login_at:null,password_changed_at:null,is_protected:false,created_at:now,updated_at:now,deleted_at:null,employee_profile:null,roles:[],groups:[]};mockUsers=[...mockUsers,user];return Promise.resolve({...user});
   }
   return request<User>("/api/users", {
@@ -526,7 +526,23 @@ export function createUser(input: CreateUserInput) {
 }
 
 export function updateUser(id: string, input: UpdateUserInput) {
-  if(import.meta.env.DEV){const index=mockUsers.findIndex((user)=>user.id===id);if(index<0)return Promise.reject(new Error("User not found"));const current=mockUsers[index];const updated:User={...current,display_name:input.display_name?.trim()||current.display_name,email:input.email?.trim().toLowerCase()||current.email,status:input.status||current.status,locale:input.locale===undefined?current.locale:input.locale||null,timezone:input.timezone===undefined?current.timezone:input.timezone||null,must_change_password:input.must_change_password??current.must_change_password,updated_at:new Date().toISOString()};mockUsers=mockUsers.map((user)=>user.id===id?updated:user);return Promise.resolve({...updated});}
+  if (process.env.NODE_ENV !== "production") {
+    const index = mockUsers.findIndex((user) => user.id === id);
+    if (index < 0) return Promise.reject(new Error("User not found"));
+    const current = mockUsers[index];
+    const updated: User = {
+      ...current,
+      display_name: input.display_name?.trim() || current.display_name,
+      email: input.email?.trim().toLowerCase() || current.email,
+      status: input.status || current.status,
+      locale: input.locale === undefined ? current.locale : input.locale || null,
+      timezone: input.timezone === undefined ? current.timezone : input.timezone || null,
+      must_change_password: input.must_change_password ?? current.must_change_password,
+      updated_at: new Date().toISOString(),
+    };
+    mockUsers = mockUsers.map((user) => (user.id === id ? updated : user));
+    return Promise.resolve({ ...updated });
+  }
   return request<User>(`/api/users/${encodeURIComponent(id)}`, {
     method: "PATCH",
     body: JSON.stringify(input),
@@ -541,7 +557,10 @@ export function replaceUser(id: string, input: UpdateUserInput) {
 }
 
 export function deleteUser(id: string) {
-  if(import.meta.env.DEV){mockUsers=mockUsers.filter((user)=>user.id!==id);return Promise.resolve();}
+  if (process.env.NODE_ENV !== "production") {
+    mockUsers = mockUsers.filter((user) => user.id !== id);
+    return Promise.resolve();
+  }
   return request<void>(`/api/users/${encodeURIComponent(id)}`, {
     method: "DELETE",
   });

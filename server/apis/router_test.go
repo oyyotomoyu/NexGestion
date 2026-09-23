@@ -32,8 +32,8 @@ func testRouter(t *testing.T) *http.ServeMux {
 	templates := system.NewTemplateService(directory, filepath.Join(t.TempDir(), "template"), users)
 	salary := system.NewSalaryService(directory, users)
 	approvals := system.NewApprovalService(directory, users, notifications)
-	checkout := system.NewCheckoutService(directory, users)
 	crm := system.NewCRMService(directory)
+	checkout := system.NewCheckoutService(directory, users, crm)
 	finance := system.NewFinanceService(directory, users)
 	logService, err := applogs.NewService(t.TempDir(), time.UTC)
 	if err != nil {

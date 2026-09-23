@@ -42,12 +42,16 @@ function createMockRecord(key: string, userId: string, input: CreateCompensation
 }
 
 export async function getMyCurrentCompensationRecord() {
-  if (import.meta.env.DEV) return currentOf(mockRecordsByUser["me"] ?? []);
+  if (process.env.NODE_ENV !== "production") {
+    return currentOf(mockRecordsByUser["me"] ?? []);
+  }
   return request<CompensationRecord>("/api/salary/me/compensation-records/current");
 }
 
 export async function listMyCompensationRecords(query: ListQuery = {}) {
-  if (import.meta.env.DEV) return sortedHistory(mockRecordsByUser["me"] ?? []);
+  if (process.env.NODE_ENV !== "production") {
+    return sortedHistory(mockRecordsByUser["me"] ?? []);
+  }
   const response = await request<ListResponse<CompensationRecord, "compensation_records">>(
     buildListPath("/api/salary/me/compensation-records", {
       sort: "effective_start_date",
@@ -60,14 +64,18 @@ export async function listMyCompensationRecords(query: ListQuery = {}) {
 }
 
 export async function getEmployeeCurrentCompensationRecord(userId: string) {
-  if (import.meta.env.DEV) return currentOf(mockRecordsByUser[userId] ?? []);
+  if (process.env.NODE_ENV !== "production") {
+    return currentOf(mockRecordsByUser[userId] ?? []);
+  }
   return request<CompensationRecord>(
     `/api/salary/employees/${encodeURIComponent(userId)}/compensation-records/current`,
   );
 }
 
 export async function listEmployeeCompensationRecords(userId: string, query: ListQuery = {}) {
-  if (import.meta.env.DEV) return sortedHistory(mockRecordsByUser[userId] ?? []);
+  if (process.env.NODE_ENV !== "production") {
+    return sortedHistory(mockRecordsByUser[userId] ?? []);
+  }
   const response = await request<ListResponse<CompensationRecord, "compensation_records">>(
     buildListPath(`/api/salary/employees/${encodeURIComponent(userId)}/compensation-records`, {
       sort: "effective_start_date",
@@ -80,7 +88,9 @@ export async function listEmployeeCompensationRecords(userId: string, query: Lis
 }
 
 export async function createCompensationRecord(userId: string, input: CreateCompensationRecordInput) {
-  if (import.meta.env.DEV) return createMockRecord(userId, userId, input);
+  if (process.env.NODE_ENV !== "production") {
+    return createMockRecord(userId, userId, input);
+  }
   return request<CompensationRecord>(
     `/api/salary/employees/${encodeURIComponent(userId)}/compensation-records`,
     { method: "POST", body: JSON.stringify(input) },

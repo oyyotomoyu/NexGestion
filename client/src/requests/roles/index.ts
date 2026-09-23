@@ -87,7 +87,9 @@ let mockRoles: Role[] = [
 ];
 
 export async function listRoles(query: ListQuery = {}) {
-  if (import.meta.env.DEV) return [...mockRoles];
+  if (process.env.NODE_ENV !== "production") {
+    return [...mockRoles];
+  }
   const response = await request<ListResponse<Role, "roles">>(
     buildListPath("/api/roles", { sort: "title", order: "asc", page_size: 100, ...query }),
   );
@@ -95,7 +97,7 @@ export async function listRoles(query: ListQuery = {}) {
 }
 
 export function getRole(id: string) {
-  if (import.meta.env.DEV) {
+  if (process.env.NODE_ENV !== "production") {
     const role = mockRoles.find((item) => item.id === id);
     if (!role) return Promise.reject(new Error(`Mock role ${id} was not found`));
     return Promise.resolve({ ...role });
@@ -104,7 +106,7 @@ export function getRole(id: string) {
 }
 
 export function createRole(input: CreateRoleInput) {
-  if (import.meta.env.DEV) {
+  if (process.env.NODE_ENV !== "production") {
     const role: Role = {
       id: crypto.randomUUID(),
       title: input.title.trim(),
@@ -123,7 +125,7 @@ export function createRole(input: CreateRoleInput) {
 }
 
 export function updateRole(id: string, input: UpdateRoleInput) {
-  if (import.meta.env.DEV) {
+  if (process.env.NODE_ENV !== "production") {
     const index = mockRoles.findIndex((item) => item.id === id);
     if (index < 0) return Promise.reject(new Error(`Mock role ${id} was not found`));
     const current = mockRoles[index];
@@ -145,7 +147,7 @@ export function updateRole(id: string, input: UpdateRoleInput) {
 }
 
 export function deleteRole(id: string) {
-  if (import.meta.env.DEV) {
+  if (process.env.NODE_ENV !== "production") {
     mockRoles = mockRoles.filter((item) => item.id !== id);
     return Promise.resolve();
   }
@@ -154,5 +156,27 @@ export function deleteRole(id: string) {
   });
 }
 
-export async function listRoleUsers(id:string,query:ListQuery={}){if(import.meta.env.DEV)return [];const response=await request<ListResponse<User,"users">>(buildListPath(`/api/roles/${encodeURIComponent(id)}/users`,{sort:"display_name",order:"asc",page_size:100,...query}));return listItems(response,"users");}
-export function setRoleUser(roleId:string,userId:string,assign:boolean){if(import.meta.env.DEV)return Promise.resolve();return request<void>(`/api/roles/${encodeURIComponent(roleId)}/users/${encodeURIComponent(userId)}`,{method:assign?"PUT":"DELETE"});}
+export async function listRoleUsers(id: string, query: ListQuery = {}) {
+  if (process.env.NODE_ENV !== "production") {
+    return [];
+  }
+  const response = await request<ListResponse<User, "users">>(
+    buildListPath(`/api/roles/${encodeURIComponent(id)}/users`, {
+      sort: "display_name",
+      order: "asc",
+      page_size: 100,
+      ...query,
+    }),
+  );
+  return listItems(response, "users");
+}
+
+export function setRoleUser(roleId: string, userId: string, assign: boolean) {
+  if (process.env.NODE_ENV !== "production") {
+    return Promise.resolve();
+  }
+  return request<void>(
+    `/api/roles/${encodeURIComponent(roleId)}/users/${encodeURIComponent(userId)}`,
+    { method: assign ? "PUT" : "DELETE" },
+  );
+}

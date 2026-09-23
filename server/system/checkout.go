@@ -165,16 +165,18 @@ type CheckoutScanResolution struct {
 type CheckoutService struct {
 	databasePath string
 	users        *UserService
+	crm          *CRMService
 	now          func() time.Time
 }
 
-func NewCheckoutService(databaseDirectory string, users *UserService) *CheckoutService {
+func NewCheckoutService(databaseDirectory string, users *UserService, crm *CRMService) *CheckoutService {
 	if strings.TrimSpace(databaseDirectory) == "" {
 		databaseDirectory = defaultDatabaseDirectory
 	}
 	return &CheckoutService{
 		databasePath: filepath.Join(databaseDirectory, "checkout.db"),
 		users:        users,
+		crm:          crm,
 		now:          time.Now,
 	}
 }
@@ -348,7 +350,7 @@ func (s *CheckoutService) AddPayment(ctx context.Context, transactionID string, 
 }
 
 func (s *CheckoutService) CompleteTransaction(ctx context.Context, transactionID string) (*CheckoutTransaction, error) {
-	return s.withMutableTransaction(ctx, transactionID, func(tx *sql.Tx, now string) error {
+	result, err := s.withMutableTransaction(ctx, transactionID, func(tx *sql.Tx, now string) error {
 		var total, paid string
 		if err := tx.QueryRowContext(ctx, `SELECT total_amount FROM checkout_transactions WHERE id=?`, transactionID).Scan(&total); err != nil {
 			return err
@@ -365,6 +367,17 @@ func (s *CheckoutService) CompleteTransaction(ctx context.Context, transactionID
 		_, err := tx.ExecContext(ctx, `UPDATE checkout_transactions SET status='completed', completed_at=?, updated_at=? WHERE id=?`, completedAt, now, transactionID)
 		return err
 	})
+	if err != nil {
+		return nil, err
+	}
+	// crm-system.md §3.2 / checkout-system.md §4.5: completing a transaction
+	// with a linked member posts earned points against total_amount.
+	if s.crm != nil && result.CRMCustomerID != nil {
+		if _, err := s.crm.EarnPointsForCheckout(ctx, *result.CRMCustomerID, result.TotalAmount, result.ID); err != nil {
+			return nil, err
+		}
+	}
+	return result, nil
 }
 
 func (s *CheckoutService) VoidTransaction(ctx context.Context, transactionID string) (*CheckoutTransaction, error) {

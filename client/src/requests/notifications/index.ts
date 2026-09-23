@@ -104,7 +104,9 @@ function retainUntil(showUntil: string | null) {
 }
 
 export async function listNotificationTypes(query: ListQuery = {}) {
-  if (import.meta.env.DEV) return [...mockTypes];
+  if (process.env.NODE_ENV !== "production") {
+    return [...mockTypes];
+  }
   const response = await request<ListResponse<NotificationType, "notification_types">>(
     buildListPath("/api/notifications/types", { sort: "severity", order: "asc", page_size: 100, ...query }),
   );
@@ -112,7 +114,7 @@ export async function listNotificationTypes(query: ListQuery = {}) {
 }
 
 export async function listNotifications(query: ListQuery = {}) {
-  if (import.meta.env.DEV) {
+  if (process.env.NODE_ENV !== "production") {
     const now = Date.now();
     return mockNotifications.filter(
       (item) =>
@@ -128,7 +130,9 @@ export async function listNotifications(query: ListQuery = {}) {
 }
 
 export async function listAdminNotifications(query: ListQuery = {}) {
-  if (import.meta.env.DEV) return [...mockNotifications];
+  if (process.env.NODE_ENV !== "production") {
+    return [...mockNotifications];
+  }
   const response = await request<ListResponse<Notification, "notifications">>(
     buildListPath("/api/notifications/admin", { sort: "updated_at", order: "desc", page_size: 100, ...query }),
   );
@@ -136,7 +140,7 @@ export async function listAdminNotifications(query: ListQuery = {}) {
 }
 
 export async function createNotification(input: CreateNotificationInput) {
-  if (import.meta.env.DEV) {
+  if (process.env.NODE_ENV !== "production") {
     const type = mockTypes.find((item) => item.code === input.type);
     if (!type) throw new Error(`Mock notification type ${input.type} was not found`);
     const showUntil = addDuration(input.show_time);
@@ -169,7 +173,7 @@ export async function createNotification(input: CreateNotificationInput) {
 }
 
 export async function updateNotification(id: string, input: UpdateNotificationInput) {
-  if (import.meta.env.DEV) {
+  if (process.env.NODE_ENV !== "production") {
     const index = mockNotifications.findIndex((item) => item.id === id);
     if (index < 0) throw new Error(`Mock notification ${id} was not found`);
     const current = mockNotifications[index];
@@ -201,7 +205,7 @@ export async function updateNotification(id: string, input: UpdateNotificationIn
 }
 
 export function hideNotification(id: string) {
-  if (import.meta.env.DEV) {
+  if (process.env.NODE_ENV !== "production") {
     const now = nowISO();
     mockNotifications = mockNotifications.map((item) =>
       item.id === id

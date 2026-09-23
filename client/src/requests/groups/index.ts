@@ -43,7 +43,9 @@ let mockGroupMembers: Record<string, GroupMember[]> = {
 };
 
 export async function listGroups(query: ListQuery = {}) {
-  if (import.meta.env.DEV) return [...mockGroups];
+  if (process.env.NODE_ENV !== "production") {
+    return [...mockGroups];
+  }
   const response = await request<ListResponse<Group, "groups">>(
     buildListPath("/api/groups", { sort: "name", order: "asc", page_size: 100, ...query }),
   );
@@ -51,7 +53,7 @@ export async function listGroups(query: ListQuery = {}) {
 }
 
 export function getGroup(id: string) {
-  if (import.meta.env.DEV) {
+  if (process.env.NODE_ENV !== "production") {
     const group = mockGroups.find((item) => item.id === id);
     return group ? Promise.resolve({ ...group }) : Promise.reject(new Error("Group not found"));
   }
@@ -59,7 +61,7 @@ export function getGroup(id: string) {
 }
 
 export function createGroup(input: CreateGroupInput) {
-  if (import.meta.env.DEV) {
+  if (process.env.NODE_ENV !== "production") {
     const now = new Date().toISOString();
     const group: Group = {
       id: crypto.randomUUID(), name: input.name.trim(), type: input.type,
@@ -75,7 +77,7 @@ export function createGroup(input: CreateGroupInput) {
 }
 
 export function updateGroup(id: string, input: UpdateGroupInput) {
-  if (import.meta.env.DEV) {
+  if (process.env.NODE_ENV !== "production") {
     const index = mockGroups.findIndex((group) => group.id === id);
     if (index < 0) return Promise.reject(new Error("Group not found"));
     const current = mockGroups[index];
@@ -97,12 +99,17 @@ export function updateGroup(id: string, input: UpdateGroupInput) {
 }
 
 export function deleteGroup(id: string) {
-  if (import.meta.env.DEV) { mockGroups = mockGroups.filter((group) => group.id !== id); return Promise.resolve(); }
+  if (process.env.NODE_ENV !== "production") {
+    mockGroups = mockGroups.filter((group) => group.id !== id);
+    return Promise.resolve();
+  }
   return request<void>(`/api/groups/${encodeURIComponent(id)}`, { method: "DELETE" });
 }
 
 export async function listGroupMembers(id: string, query: ListQuery = {}) {
-  if (import.meta.env.DEV) return [...(mockGroupMembers[id] || [])];
+  if (process.env.NODE_ENV !== "production") {
+    return [...(mockGroupMembers[id] || [])];
+  }
   const response = await request<ListResponse<GroupMember, "members">>(
     buildListPath(`/api/groups/${encodeURIComponent(id)}/members`, { sort: "display_name", order: "asc", page_size: 100, ...query }),
   );
