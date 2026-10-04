@@ -66,7 +66,7 @@ func listPermissions(users *system.UserService) http.HandlerFunc {
 		writeJSON(w, http.StatusOK, listResponse("permissions", items))
 	}
 }
-func setRolePermission(users *system.UserService, grant bool) http.HandlerFunc {
+func setRolePermission(users *system.UserService, security *system.SecurityService, grant bool) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		var input struct {
 			CurrentPassword string `json:"current_password"`
@@ -84,6 +84,18 @@ func setRolePermission(users *system.UserService, grant bool) http.HandlerFunc {
 			return
 		}
 		recordRequestLog(r, "info", "changed role permission "+r.PathValue("permissionId")+" on "+r.PathValue("id"))
+		if grant {
+			// SIEM.md Section 6's privilege-escalation rule needs the
+			// permission KEY, not the DB id the route receives - look it up
+			// the same way the grant itself was just validated.
+			if permission, err := users.GetPermission(r.Context(), r.PathValue("permissionId")); err == nil {
+				_, _ = security.RecordEvent(r.Context(), system.SecurityEventInput{
+					EventType: "permission_granted", Severity: "warning", ActorUserID: authenticatedUserID(r), SourceIP: clientIP(r),
+					Module: "roles", RecordRef: r.PathValue("id"), PermissionKey: permission.PermissionKey,
+					Summary: "granted " + permission.PermissionKey + " to role " + r.PathValue("id"),
+				})
+			}
+		}
 		w.WriteHeader(http.StatusNoContent)
 	}
 }

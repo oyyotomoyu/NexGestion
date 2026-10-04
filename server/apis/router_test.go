@@ -35,12 +35,13 @@ func testRouter(t *testing.T) *http.ServeMux {
 	crm := system.NewCRMService(directory)
 	checkout := system.NewCheckoutService(directory, users, crm)
 	finance := system.NewFinanceService(directory, users)
+	security := system.NewSecurityService(directory, users, notifications)
 	logService, err := applogs.NewService(t.TempDir(), time.UTC)
 	if err != nil {
 		t.Fatal(err)
 	}
 	t.Cleanup(logService.Close)
-	InitRouter(router, users, attendance, notifications, reports, templates, salary, approvals, checkout, crm, finance, system.NewAuthService(users), logService)
+	InitRouter(router, users, attendance, notifications, reports, templates, salary, approvals, checkout, crm, finance, security, system.NewAuthService(users), logService)
 	return router
 }
 
@@ -869,7 +870,19 @@ func TestNotificationAPI(t *testing.T) {
 	if err := json.NewDecoder(listResponse.Body).Decode(&listBody); err != nil {
 		t.Fatal(err)
 	}
-	if len(listBody.Notifications) != 1 || listBody.Notifications[0].ID != created.ID {
+	// The admin's login earlier in this test is also its first login ever in
+	// this fresh database, which legitimately trips the SIEM
+	// new-device-privileged-login rule (system/security.go) and lands its own
+	// system-generated alert in the same inbox - so assert the created
+	// notification is present rather than that it's the only one.
+	found := false
+	for _, notification := range listBody.Notifications {
+		if notification.ID == created.ID {
+			found = true
+			break
+		}
+	}
+	if !found {
 		t.Fatalf("expected created notification in inbox, got %+v", listBody.Notifications)
 	}
 
@@ -910,8 +923,10 @@ func TestNotificationAPI(t *testing.T) {
 	if err := json.NewDecoder(hiddenList.Body).Decode(&hiddenBody); err != nil {
 		t.Fatal(err)
 	}
-	if len(hiddenBody.Notifications) != 0 {
-		t.Fatalf("hidden notification should not appear, got %+v", hiddenBody.Notifications)
+	for _, notification := range hiddenBody.Notifications {
+		if notification.ID == created.ID {
+			t.Fatalf("hidden notification should not appear, got %+v", hiddenBody.Notifications)
+		}
 	}
 
 	adminList := serveAuthorized(router, http.MethodGet, "/api/notifications/admin", nil, adminToken)
@@ -924,7 +939,13 @@ func TestNotificationAPI(t *testing.T) {
 	if err := json.NewDecoder(adminList.Body).Decode(&adminBody); err != nil {
 		t.Fatal(err)
 	}
-	if len(adminBody.Notifications) != 1 || adminBody.Notifications[0].Status != "hidden" {
+	foundHidden := false
+	for _, notification := range adminBody.Notifications {
+		if notification.ID == created.ID && notification.Status == "hidden" {
+			foundHidden = true
+		}
+	}
+	if !foundHidden {
 		t.Fatalf("admin list should include hidden notification, got %+v", adminBody.Notifications)
 	}
 }
@@ -1309,6 +1330,143 @@ func TestCRMAPI(t *testing.T) {
 	}
 }
 
+func TestSecurityAPIRequiresAuthentication(t *testing.T) {
+	response := serve(testRouter(t), http.MethodGet, "/api/security/events", nil)
+	if response.Code != http.StatusUnauthorized {
+		t.Fatalf("expected %d, got %d", http.StatusUnauthorized, response.Code)
+	}
+}
+
+func TestSecurityAPI(t *testing.T) {
+	router := testRouter(t)
+	adminToken, _ := loginForTest(t, router)
+
+	rulesResponse := serveAuthorized(router, http.MethodGet, "/api/security/rules", nil, adminToken)
+	if rulesResponse.Code != http.StatusOK {
+		t.Fatalf("list rules: %d %s", rulesResponse.Code, rulesResponse.Body.String())
+	}
+	var rulesBody struct {
+		Rules []system.SecurityRule `json:"rules"`
+	}
+	if err := json.NewDecoder(rulesResponse.Body).Decode(&rulesBody); err != nil {
+		t.Fatal(err)
+	}
+	if len(rulesBody.Rules) == 0 {
+		t.Fatal("expected shipped default rules")
+	}
+
+	updateRule := serveAuthorized(router, http.MethodPatch, "/api/security/rules/brute_force_login",
+		[]byte(`{"config_json":"{\"threshold\":3,\"window_minutes\":5}"}`), adminToken)
+	if updateRule.Code != http.StatusOK {
+		t.Fatalf("update rule: %d %s", updateRule.Code, updateRule.Body.String())
+	}
+	var updatedRule system.SecurityRule
+	if err := json.NewDecoder(updateRule.Body).Decode(&updatedRule); err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(updatedRule.ConfigJSON, `"threshold":3`) {
+		t.Fatalf("expected updated threshold, got %+v", updatedRule)
+	}
+
+	settingsResponse := serveAuthorized(router, http.MethodGet, "/api/security/settings", nil, adminToken)
+	if settingsResponse.Code != http.StatusOK {
+		t.Fatalf("get settings: %d %s", settingsResponse.Code, settingsResponse.Body.String())
+	}
+	var settings system.SecuritySettings
+	if err := json.NewDecoder(settingsResponse.Body).Decode(&settings); err != nil {
+		t.Fatal(err)
+	}
+	if settings.DeploymentPosture != "lan_only" || settings.RetentionDays != 365 {
+		t.Fatalf("unexpected default settings: %+v", settings)
+	}
+
+	// Toggling posture is itself a security-relevant change (SIEM.md Section
+	// 7.2) and should show up in the event timeline.
+	updateSettings := serveAuthorized(router, http.MethodPatch, "/api/security/settings", []byte(`{"deployment_posture":"internet_exposed"}`), adminToken)
+	if updateSettings.Code != http.StatusOK {
+		t.Fatalf("update settings: %d %s", updateSettings.Code, updateSettings.Body.String())
+	}
+
+	eventsResponse := serveAuthorized(router, http.MethodGet, "/api/security/events", nil, adminToken)
+	if eventsResponse.Code != http.StatusOK {
+		t.Fatalf("list events: %d %s", eventsResponse.Code, eventsResponse.Body.String())
+	}
+	var eventsBody struct {
+		Events []system.SecurityEvent `json:"events"`
+	}
+	if err := json.NewDecoder(eventsResponse.Body).Decode(&eventsBody); err != nil {
+		t.Fatal(err)
+	}
+	foundPostureChange := false
+	for _, event := range eventsBody.Events {
+		if event.EventType == "deployment_posture_changed" {
+			foundPostureChange = true
+		}
+	}
+	if !foundPostureChange {
+		t.Fatalf("expected a deployment_posture_changed event, got %+v", eventsBody.Events)
+	}
+
+	addRecipient := serveAuthorized(router, http.MethodPost, "/api/security/recipients",
+		[]byte(`{"email":"soc@example.com","scope_type":"severity","scope_value":"critical","channel":"email"}`), adminToken)
+	if addRecipient.Code != http.StatusCreated {
+		t.Fatalf("add recipient: %d %s", addRecipient.Code, addRecipient.Body.String())
+	}
+	var recipient system.SecurityAlertRecipient
+	if err := json.NewDecoder(addRecipient.Body).Decode(&recipient); err != nil {
+		t.Fatal(err)
+	}
+
+	listRecipients := serveAuthorized(router, http.MethodGet, "/api/security/recipients", nil, adminToken)
+	if listRecipients.Code != http.StatusOK {
+		t.Fatalf("list recipients: %d %s", listRecipients.Code, listRecipients.Body.String())
+	}
+
+	removeRecipient := serveAuthorized(router, http.MethodDelete, "/api/security/recipients/"+recipient.ID, nil, adminToken)
+	if removeRecipient.Code != http.StatusNoContent {
+		t.Fatalf("remove recipient: %d %s", removeRecipient.Code, removeRecipient.Body.String())
+	}
+
+	testAlert := serveAuthorized(router, http.MethodPost, "/api/security/test-alert", nil, adminToken)
+	if testAlert.Code != http.StatusOK {
+		t.Fatalf("send test alert: %d %s", testAlert.Code, testAlert.Body.String())
+	}
+
+	// A user holding only security.events.read cannot manage rules or alerts.
+	userResponse := serveAuthorized(router, http.MethodPost, "/api/users", []byte(`{"display_name":"Security Reader","email":"secreader@example.com","password":"a-secure-user-password"}`), adminToken)
+	var reader system.User
+	if err := json.NewDecoder(userResponse.Body).Decode(&reader); err != nil {
+		t.Fatal(err)
+	}
+	roleResponse := serveAuthorized(router, http.MethodPost, "/api/roles", []byte(`{"title":"Security Reader"}`), adminToken)
+	var readerRole system.Role
+	if err := json.NewDecoder(roleResponse.Body).Decode(&readerRole); err != nil {
+		t.Fatal(err)
+	}
+	if response := serveAuthorized(router, http.MethodPut, "/api/roles/"+readerRole.ID+"/permissions/security.events.read", nil, adminToken); response.Code != http.StatusNoContent {
+		t.Fatalf("grant security.events.read: %d %s", response.Code, response.Body.String())
+	}
+	if response := serveAuthorized(router, http.MethodPut, "/api/roles/"+readerRole.ID+"/users/"+reader.ID, nil, adminToken); response.Code != http.StatusNoContent {
+		t.Fatalf("assign reader role: %d %s", response.Code, response.Body.String())
+	}
+	readerLogin := serve(router, http.MethodPost, "/api/auth/login", []byte(`{"email":"secreader@example.com","password":"a-secure-user-password"}`))
+	var readerTokens struct {
+		AccessToken string `json:"access_token"`
+	}
+	if err := json.NewDecoder(readerLogin.Body).Decode(&readerTokens); err != nil {
+		t.Fatal(err)
+	}
+	if response := serveAuthorized(router, http.MethodGet, "/api/security/events", nil, readerTokens.AccessToken); response.Code != http.StatusOK {
+		t.Fatalf("reader read events: expected %d, got %d %s", http.StatusOK, response.Code, response.Body.String())
+	}
+	if response := serveAuthorized(router, http.MethodPatch, "/api/security/rules/brute_force_login", []byte(`{"enabled":false}`), readerTokens.AccessToken); response.Code != http.StatusForbidden {
+		t.Fatalf("reader update rule: expected %d, got %d %s", http.StatusForbidden, response.Code, response.Body.String())
+	}
+	if response := serveAuthorized(router, http.MethodPost, "/api/security/test-alert", nil, readerTokens.AccessToken); response.Code != http.StatusForbidden {
+		t.Fatalf("reader send test alert: expected %d, got %d %s", http.StatusForbidden, response.Code, response.Body.String())
+	}
+}
+
 func uploadTemplateForTest(t *testing.T, router http.Handler, token, filename string, content []byte, audiencesJSON, description string) *httptest.ResponseRecorder {
 	t.Helper()
 	var body bytes.Buffer
@@ -1362,6 +1520,7 @@ func serveAuthorized(router http.Handler, method, path string, body []byte, toke
 	if body != nil {
 		request.Header.Set("Content-Type", "application/json")
 	}
+	setTestRemoteAddr(request)
 	response := httptest.NewRecorder()
 	router.ServeHTTP(response, request)
 	return response
@@ -1372,7 +1531,18 @@ func serve(router http.Handler, method, path string, body []byte) *httptest.Resp
 	if body != nil {
 		request.Header.Set("Content-Type", "application/json")
 	}
+	setTestRemoteAddr(request)
 	response := httptest.NewRecorder()
 	router.ServeHTTP(response, request)
 	return response
+}
+
+// setTestRemoteAddr replaces httptest.NewRequest's default RemoteAddr
+// (192.0.2.1, a public documentation-range address) with a private LAN
+// address - the realistic case per SIEM.md Section 2 ("primary deployment
+// model is a server reachable over Wi-Fi/LAN"). Without this, every test
+// request classifies as a Section 7.2 lan_only violation and floods the
+// admin's notification inbox with security alerts.
+func setTestRemoteAddr(request *http.Request) {
+	request.RemoteAddr = "192.168.1.50:5555"
 }

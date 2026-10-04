@@ -45,6 +45,14 @@ export default function Settings() {
               <NexText as="span" color="inherit">{t("global.k_Settings_Groups_Title")}</NexText>
             </NavLink>
           ) : null}
+          {hasPermission("security.access") ? (
+            <>
+              <NexText variant="label">{t("global.k_Settings_Security_Title")}</NexText>
+              <NavLink to="security">
+                <NexText as="span" color="inherit">{t("global.k_Settings_Security_Title")}</NexText>
+              </NavLink>
+            </>
+          ) : null}
         </nav>
         <div className="settings__content">
           <Outlet />

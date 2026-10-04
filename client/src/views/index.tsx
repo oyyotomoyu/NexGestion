@@ -20,6 +20,7 @@ import Groups from "@/views/Settings/Groups";
 import GroupDetail from "@/views/Settings/Groups/GroupDetail";
 import Users from "@/views/Settings/Users";
 import UserDetail from "@/views/Settings/Users/UserDetail";
+import Security from "@/views/Settings/Security";
 
 function SettingsDefaultRedirect({ nested = false }: { nested?: boolean }) {
   const { user } = useAuth();
@@ -98,6 +99,10 @@ const routes: RouteObject[] = [
             element: <SettingsDefaultRedirect />,
           },
           { path: "profile/:userId", element: <UserDetail /> },
+          {
+            path: "security",
+            element: <ProtectedRoute permission="security.access"><Security /></ProtectedRoute>,
+          },
           {
             path: "access-control",
             children: [

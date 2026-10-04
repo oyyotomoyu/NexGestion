@@ -59,9 +59,11 @@ func main() {
 	crm := system.NewCRMService(databaseDirectory)
 	checkout := system.NewCheckoutService(databaseDirectory, users, crm)
 	finance := system.NewFinanceService(databaseDirectory, users)
-	apis.InitRouter(mux, users, attendance, notifications, reports, templates, salary, approvals, checkout, crm, finance, system.NewAuthService(users), logService)
+	security := system.NewSecurityService(databaseDirectory, users, notifications)
+	apis.InitRouter(mux, users, attendance, notifications, reports, templates, salary, approvals, checkout, crm, finance, security, system.NewAuthService(users), logService)
 	go runAttendanceMaintenance(attendance, logService)
 	go runNotificationMaintenance(notifications, logService)
+	go runSecurityMaintenance(security, logService)
 	mux.Handle("/", spaHandler(distDir))
 
 	server := &http.Server{
@@ -82,6 +84,20 @@ func runNotificationMaintenance(notifications *system.NotificationService, logSe
 	run := func() {
 		if err := notifications.ExpireAndCleanup(context.Background()); err != nil {
 			_ = logService.Log("error", "notification maintenance failed: "+err.Error())
+		}
+	}
+	run()
+	ticker := time.NewTicker(time.Hour)
+	defer ticker.Stop()
+	for range ticker.C {
+		run()
+	}
+}
+
+func runSecurityMaintenance(security *system.SecurityService, logService *applogs.Service) {
+	run := func() {
+		if err := security.RunMaintenance(context.Background()); err != nil {
+			_ = logService.Log("error", "security maintenance failed: "+err.Error())
 		}
 	}
 	run()

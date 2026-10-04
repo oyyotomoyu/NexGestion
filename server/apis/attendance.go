@@ -209,7 +209,7 @@ func generateAttendanceMonthlyReport(attendance *system.AttendanceService) http.
 	}
 }
 
-func correctAttendanceDay(attendance *system.AttendanceService) http.HandlerFunc {
+func correctAttendanceDay(attendance *system.AttendanceService, security *system.SecurityService) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		var input system.CorrectAttendanceDayInput
 		if err := decodeJSON(w, r, &input); err != nil {
@@ -222,6 +222,10 @@ func correctAttendanceDay(attendance *system.AttendanceService) http.HandlerFunc
 			return
 		}
 		recordRequestLog(r, "warning", "corrected attendance day "+day.ID)
+		_, _ = security.RecordEvent(r.Context(), system.SecurityEventInput{
+			EventType: "attendance_corrected", Severity: "info", ActorUserID: authenticatedUserID(r), SourceIP: clientIP(r),
+			Module: "attendance", RecordRef: day.ID, Summary: "corrected attendance day " + day.ID,
+		})
 		writeJSON(w, http.StatusOK, day)
 	}
 }

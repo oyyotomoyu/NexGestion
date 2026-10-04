@@ -49,6 +49,7 @@ var RequiredDatabases = []DatabaseSpec{
 	checkoutDatabaseSpec(),
 	crmDatabaseSpec(),
 	financeDatabaseSpec(),
+	securityDatabaseSpec(),
 }
 
 // syncSystemSettingsDefaults inserts default settings that were added after a

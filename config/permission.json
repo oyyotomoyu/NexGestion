@@ -542,6 +542,37 @@
       "key": "scheduling.access",
       "module": "scheduling",
       "description": "Access the Scheduling System"
+    },
+    {
+      "key": "security.access",
+      "module": "security",
+      "description": "Access the Security module"
+    },
+    {
+      "key": "security.events.read",
+      "module": "security",
+      "description": "View the security-event timeline and its detection-rule configuration"
+    },
+    {
+      "key": "security.alerts.read",
+      "module": "security",
+      "description": "Receive security alert notifications"
+    },
+    {
+      "key": "security.rules.manage",
+      "module": "security",
+      "description": "Enable/disable and tune detection-rule thresholds and deployment posture",
+      "high_risk": true,
+      "high_risk_reason": "Can silence detection rules or change what traffic is treated as normal",
+      "requires_password": true
+    },
+    {
+      "key": "security.alerts.manage",
+      "module": "security",
+      "description": "Configure who receives security alerts and through which channel",
+      "high_risk": true,
+      "high_risk_reason": "Can redirect or suppress who is notified of a security incident",
+      "requires_password": true
     }
   ]
 }

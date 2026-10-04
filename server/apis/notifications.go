@@ -65,7 +65,7 @@ func listAdminNotifications(notifications *system.NotificationService) http.Hand
 	}
 }
 
-func createNotification(notifications *system.NotificationService) http.HandlerFunc {
+func createNotification(notifications *system.NotificationService, security *system.SecurityService) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		var input system.CreateNotificationInput
 		if err := decodeJSON(w, r, &input); err != nil {
@@ -78,6 +78,17 @@ func createNotification(notifications *system.NotificationService) http.HandlerF
 			return
 		}
 		recordRequestLog(r, "info", "created notification "+item.ID)
+		for _, audience := range input.Audiences {
+			if strings.TrimSpace(audience.Scope) == "organization" {
+				// A plausible phishing/social-engineering vector if the
+				// sending account is compromised (SIEM.md Section 4).
+				_, _ = security.RecordEvent(r.Context(), system.SecurityEventInput{
+					EventType: "notification_broadcast_sent", Severity: "info", ActorUserID: authenticatedUserID(r), SourceIP: clientIP(r),
+					Module: "notifications", RecordRef: item.ID, Summary: "sent organization-wide notification " + item.ID,
+				})
+				break
+			}
+		}
 		writeJSON(w, http.StatusCreated, item)
 	}
 }

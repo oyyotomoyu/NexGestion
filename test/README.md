@@ -16,6 +16,13 @@ Each script must follow the matching system document in `docs/System`:
 | `notification.sh` | `docs/System/notification-system.md` | Notification types, send/edit/hide/export |
 | `report_files.sh` | `docs/System/report-files.md` | Report file list/download/delete policy |
 | `logs.sh` | `docs/System/log.md` | Log query filters, limits, retention-readable output |
+| `security.sh` | `docs/System/SIEM.md` | Security event timeline, detection rules, deployment posture, alert recipients (singleton settings - see TEST_CASES.md for the restore-state design note) |
+| `templates.sh` | `docs/System/template-system.md` | Template upload, audience-based visibility/download, ownership-based delete, and storage quota limits |
+| `salary.sh` | `docs/System/salary-system.md` | Compensation-basis assignment, effective-dated rate history, and self/employee read boundaries |
+| `checkout.sh` | `docs/System/checkout-system.md` | Checkout transaction lifecycle (lines, discounts, payments, complete/void), coupon and promotion-rule management, and scan resolution |
+| `approvals.sh` | `docs/System/approval-system.md` | Flow template CRUD, request submission, decide/cancel/reassign routing, and sequential state-machine lifecycle rules |
+| `finance.sh` | `docs/System/finance-system.md` | GL accounts, periods, and journal entries; AP vendor and bill approval; double-entry balance and period-close integrity rules |
+| `crm.sh` | `docs/System/crm-system.md` | Customer/tier/membership/price-list CRUD, loyalty points ledger and balance, B2B/B2C permission boundaries |
 
 When implementation and documentation disagree, record the failed case in the report and update the document or implementation in a separate change.
 

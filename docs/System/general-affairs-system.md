@@ -59,9 +59,9 @@ An internal request for supplies or small equipment, distinct from Procurement's
 
 A requisition is fulfilled by at most one of these two paths, never both — a fresh vendor purchase or a draw against existing stock. `status = fulfilled` is set manually when neither link applies (the item was handed over directly with no formal PO or stock record), or derived from the linked PO or Outbound reaching a terminal state when one exists.
 
-### 2.3 Resource Booking
+### 2.3 Resource Booking & Item Borrowing (借用)
 
-Bookable shared resources — meeting rooms, a company vehicle, a projector — and the reservations against them. Booking is self-service: any organization member holding booking permission (Section 4) picks a resource and a time directly, with no approval step by default — General Affairs' role is providing the resources and, when two people want the same slot, coordinating the conflict (Section 2.3.4), not gatekeeping every booking.
+Bookable shared resources — meeting rooms, a company vehicle, a projector, or a piece of equipment staff check out and physically return (a camera, a tool) — and the reservations against them. Booking is self-service: any organization member holding booking permission (Section 4) picks a resource and a time directly, with no approval step by default — General Affairs' role is providing the resources and, when two people want the same slot, coordinating the conflict (Section 2.3.4), not gatekeeping every booking. A resource is either used in place (a meeting room, a vehicle) or physically handed over and must come back (Section 2.3.2's `returned_at`) — the same booking primitive covers both; what differs is only whether a return needs to be recorded. This is deliberately not modeled as a variant of Assets & Custody (Section 2.1): custody is for long-running, often employment-duration assignment with onboarding/offboarding ties, while borrowing here is a short, self-service checkout against a shared pool.
 
 #### 2.3.1 Bookable Resources
 
@@ -70,6 +70,7 @@ Bookable shared resources — meeting rooms, a company vehicle, a projector — 
 | `id` | TEXT/UUID | Yes | Immutable resource ID |
 | `name` | TEXT | Yes | e.g. "3樓大會議室", "公務車 (ABC-1234)" |
 | `category` | TEXT | No | Organization-defined, e.g. "meeting_room", "vehicle", "equipment" |
+| `requires_return` | BOOLEAN | Yes | Whether this resource is physically handed to the booker and must be returned (e.g. a camera, a borrowed tool) rather than used in place (e.g. a meeting room, a vehicle) |
 | `status` | TEXT | Yes | `active`, `inactive` |
 
 #### 2.3.2 Bookings
@@ -83,8 +84,13 @@ Bookable shared resources — meeting rooms, a company vehicle, a projector — 
 | `starts_at` | DATETIME | Yes | Booking start |
 | `ends_at` | DATETIME | Yes | Booking end, must be after `starts_at` |
 | `status` | TEXT | Yes | `confirmed`, `pending_coordination`, `cancelled` |
+| `returned_at` | DATETIME | No | When a `requires_return` resource was actually handed back; unset/ignored when the resource's `requires_return` is false |
 
-Two `confirmed` bookings for the same `resource_id` must not have overlapping `[starts_at, ends_at)` ranges — the conflict check this table exists to enforce. A new request that overlaps an existing `confirmed` booking is rejected by default; the only way past that rejection is Space Coordination (Section 2.3.4), and `pending_coordination` is exactly for that case — a conflicting request stays in that status while the conflict is being negotiated, instead of being blocked outright. This document deliberately stops at the booking primitive; a fuller meeting concept beyond invitees (Section 2.3.3) — full agenda, minutes — is a distinct, larger idea some other documents refer to as a future "Meeting System" and remains out of scope here (Section 5) — it would consume this booking primitive for its room reservation, not duplicate it.
+Two `confirmed` bookings for the same `resource_id` must not have overlapping `[starts_at, ends_at)` ranges — the conflict check this table exists to enforce. A new request that overlaps an existing `confirmed` booking is rejected by default; the only way past that rejection is Space Coordination (Section 2.3.4), and `pending_coordination` is exactly for that case — a conflicting request stays in that status while the conflict is being negotiated, instead of being blocked outright.
+
+For a `requires_return` resource, a `confirmed` booking whose `ends_at` has passed with `returned_at` still unset is overdue — a derived condition, not a stored status, the same read-derived pattern Section 2.1.1 already uses for asset custody. Recording the return falls under the same `general_affairs.bookings.book` permission (Section 4) the booker already holds over their own booking; General Affairs staff holding `general_affairs.bookings.manage` can record it on anyone's behalf (e.g. equipment handed back to a different staff member than the original booker).
+
+This document deliberately stops at the booking primitive; a fuller meeting concept beyond invitees (Section 2.3.3) — full agenda, minutes — is a distinct, larger idea some other documents refer to as a future "Meeting System" and remains out of scope here (Section 5) — it would consume this booking primitive for its room reservation, not duplicate it.
 
 #### 2.3.3 Booking Invitees
 
@@ -260,7 +266,7 @@ An Office Supply Requisition (Section 2.2) may carry an optional `procurement_pu
 
 ### 3.6 Notification System
 
-Booking confirmations (Section 2.3.2), requisition/seal-request decisions, and asset issuance/return should reuse the existing `notification-system.md` capability rather than a bespoke messaging path. So should a Poll opening and an approaching `closes_at` deadline (Section 2.5.1) — delivered to the resolved audience (the whole organization, or `target_group_id`'s members per Section 3.5), the same audience-delivery mechanism `notification-system.md` §4 already provides.
+Booking confirmations (Section 2.3.2), requisition/seal-request decisions, asset issuance/return, and a borrowed item becoming overdue (Section 2.3.2) should reuse the existing `notification-system.md` capability rather than a bespoke messaging path. So should a Poll opening and an approaching `closes_at` deadline (Section 2.5.1) — delivered to the resolved audience (the whole organization, or `target_group_id`'s members per Section 3.5), the same audience-delivery mechanism `notification-system.md` §4 already provides.
 
 ### 3.7 Inventory System
 
@@ -283,8 +289,8 @@ Planned permission keys, to be added to `config/permission.json` when these APIs
 | `general_affairs.requisitions.read.self` | View the status of the current user's own requisitions |
 | `general_affairs.requisitions.manage` | View all requisitions and mark them fulfilled |
 | `general_affairs.bookings.read` | View resource availability and bookings |
-| `general_affairs.bookings.book` | Create a booking for oneself, invite attendees (Section 2.3.3), and edit/cancel a booking one owns — including responding `accept`/`decline` to a Space Coordination case (Section 2.3.4) raised against a booking one owns, the same "own record" exception pattern already used for template uploads (`template-system.md` §2) |
-| `general_affairs.bookings.manage` | Manage Bookable Resources (Section 2.3.1) and edit/cancel any booking regardless of owner |
+| `general_affairs.bookings.book` | Create a booking for oneself, invite attendees (Section 2.3.3), edit/cancel a booking one owns, and record that booking's return when its resource is `requires_return` (Section 2.3.2) — including responding `accept`/`decline` to a Space Coordination case (Section 2.3.4) raised against a booking one owns, the same "own record" exception pattern already used for template uploads (`template-system.md` §2) |
+| `general_affairs.bookings.manage` | Manage Bookable Resources (Section 2.3.1), edit/cancel any booking regardless of owner, and record any booking's return regardless of owner |
 | `general_affairs.bookings.coordinate` | Initiate a Space Coordination case (Section 2.3.4) |
 | `general_affairs.seals.request` | Submit a Seal Usage Request (Section 2.4.2) |
 | `general_affairs.seals.manage` | Manage seal records (Section 2.4.1), approve usage outside the Approval System fallback, and record actual use (Section 2.4.3) |
@@ -308,6 +314,7 @@ The initial Admin role automatically receives every General Affairs permission t
 - email delivery for Space Coordination notices (Section 2.3.4) — `notification-system.md` is an in-app channel only today; no SMTP/email-sending capability is designed anywhere in this platform yet, so how "send an email to the existing booker" is actually implemented isn't decided;
 - attendee availability/conflict checking (Section 2.3.3) — only the resource itself is conflict-checked (Section 2.3.2), never whether an invitee is free;
 - whether a requester can trigger a Space Coordination case directly on submission (Section 2.3.4), or only a General Affairs staff member can initiate one;
+- grace period, escalation, or any penalty/follow-up once a borrowed item (Section 2.3.2) goes overdue beyond the Section 3.6 reminder — no automatic process is modeled;
 - what happens after a Space Coordination `decline` (Section 2.3.4) beyond "resolve it manually" — no automatic re-proposal or escalation is modeled;
 - retention period for closed requisitions, completed bookings, and seal usage logs;
 - exactly how and when a Salary settlement run consumes a `pending` Salary Deduction Request (Section 2.6.1) and marks it `applied` — not specified on either this document or `salary-system.md`;

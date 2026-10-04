@@ -43,7 +43,7 @@ func getUser(users *system.UserService) http.HandlerFunc {
 	}
 }
 
-func createUser(users *system.UserService) http.HandlerFunc {
+func createUser(users *system.UserService, security *system.SecurityService) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		var input system.CreateUserInput
 		if err := decodeJSON(w, r, &input); err != nil {
@@ -57,6 +57,10 @@ func createUser(users *system.UserService) http.HandlerFunc {
 		}
 		w.Header().Set("Location", "/api/users/"+result.ID)
 		recordRequestLog(r, "info", "created user "+result.ID)
+		_, _ = security.RecordEvent(r.Context(), system.SecurityEventInput{
+			EventType: "user_created", Severity: "info", ActorUserID: authenticatedUserID(r), SourceIP: clientIP(r),
+			Module: "users", RecordRef: result.ID, Summary: "created user " + result.ID,
+		})
 		writeJSON(w, http.StatusCreated, result)
 	}
 }
@@ -78,13 +82,17 @@ func updateUser(users *system.UserService) http.HandlerFunc {
 	}
 }
 
-func deleteUser(users *system.UserService) http.HandlerFunc {
+func deleteUser(users *system.UserService, security *system.SecurityService) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if err := users.Delete(r.Context(), authenticatedUserID(r), r.PathValue("id")); err != nil {
 			writeSystemError(w, err)
 			return
 		}
 		recordRequestLog(r, "info", "deleted user "+r.PathValue("id"))
+		_, _ = security.RecordEvent(r.Context(), system.SecurityEventInput{
+			EventType: "user_disabled", Severity: "warning", ActorUserID: authenticatedUserID(r), SourceIP: clientIP(r),
+			Module: "users", RecordRef: r.PathValue("id"), Summary: "disabled user " + r.PathValue("id"),
+		})
 		w.WriteHeader(http.StatusNoContent)
 	}
 }

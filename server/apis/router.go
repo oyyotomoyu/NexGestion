@@ -12,14 +12,14 @@ import (
 // API handlers belong in this package and may call the system package to
 // perform application operations. The router itself is only responsible for
 // directing requests to the correct handler.
-func InitRouter(router *http.ServeMux, users *system.UserService, attendance *system.AttendanceService, notifications *system.NotificationService, reports *system.ReportFileService, templates *system.TemplateService, salary *system.SalaryService, approvals *system.ApprovalService, checkout *system.CheckoutService, crm *system.CRMService, finance *system.FinanceService, auth *system.AuthService, logService *applogs.Service) {
+func InitRouter(router *http.ServeMux, users *system.UserService, attendance *system.AttendanceService, notifications *system.NotificationService, reports *system.ReportFileService, templates *system.TemplateService, salary *system.SalaryService, approvals *system.ApprovalService, checkout *system.CheckoutService, crm *system.CRMService, finance *system.FinanceService, security *system.SecurityService, auth *system.AuthService, logService *applogs.Service) {
 	catalog, err := system.LoadPermissionCatalog()
 	if err != nil {
 		panic("load permission catalog: " + err.Error())
 	}
 	// Public endpoints.
 	router.HandleFunc("GET /api/health", Health)
-	router.HandleFunc("POST /api/auth/login", login(auth, logService))
+	router.HandleFunc("POST /api/auth/login", login(auth, users, security, logService))
 	router.HandleFunc("POST /api/auth/refresh", refresh(auth, logService))
 
 	// Every protected route declares a permission from config/permission.json.
@@ -36,11 +36,11 @@ func InitRouter(router *http.ServeMux, users *system.UserService, attendance *sy
 	router.HandleFunc("GET /api/auth/me", protected("users.read", me(users)))
 	router.HandleFunc("POST /api/auth/logout", protected("users.read", logout(auth)))
 	router.HandleFunc("GET /api/users", protected("users.read", listUsers(users)))
-	router.HandleFunc("POST /api/users", protected("users.manage", createUser(users)))
+	router.HandleFunc("POST /api/users", protected("users.manage", createUser(users, security)))
 	router.HandleFunc("GET /api/users/{id}", protected("users.read", getUser(users)))
 	router.HandleFunc("PUT /api/users/{id}", protected("users.manage", updateUser(users)))
 	router.HandleFunc("PATCH /api/users/{id}", protected("users.manage", updateUser(users)))
-	router.HandleFunc("DELETE /api/users/{id}", protected("users.manage", deleteUser(users)))
+	router.HandleFunc("DELETE /api/users/{id}", protected("users.manage", deleteUser(users, security)))
 	router.HandleFunc("GET /api/roles", protected("roles.read", listRoles(users)))
 	router.HandleFunc("GET /api/roles/{id}", protected("roles.read", getRole(users)))
 	router.HandleFunc("POST /api/roles", protected("roles.manage", createRole(users)))
@@ -49,8 +49,8 @@ func InitRouter(router *http.ServeMux, users *system.UserService, attendance *sy
 	router.HandleFunc("GET /api/roles/{id}/users", protected("roles.read", listRoleUsers(users)))
 	router.HandleFunc("PUT /api/roles/{id}/users/{userId}", protected("roles.assign", setRoleUser(users, true)))
 	router.HandleFunc("DELETE /api/roles/{id}/users/{userId}", protected("roles.assign", setRoleUser(users, false)))
-	router.HandleFunc("PUT /api/roles/{id}/permissions/{permissionId}", protected("permissions.assign", setRolePermission(users, true)))
-	router.HandleFunc("DELETE /api/roles/{id}/permissions/{permissionId}", protected("permissions.assign", setRolePermission(users, false)))
+	router.HandleFunc("PUT /api/roles/{id}/permissions/{permissionId}", protected("permissions.assign", setRolePermission(users, security, true)))
+	router.HandleFunc("DELETE /api/roles/{id}/permissions/{permissionId}", protected("permissions.assign", setRolePermission(users, security, false)))
 	router.HandleFunc("GET /api/groups", protected("groups.read", listGroups(users)))
 	router.HandleFunc("GET /api/groups/{id}", protected("groups.read", getGroup(users)))
 	router.HandleFunc("POST /api/groups", protected("groups.manage", createGroup(users)))
@@ -75,16 +75,16 @@ func InitRouter(router *http.ServeMux, users *system.UserService, attendance *sy
 	router.HandleFunc("GET /api/attendance/reports/{month}", protected("attendance.reports.read", attendanceMonthlyReports(attendance)))
 	router.HandleFunc("POST /api/attendance/reports/{month}/generate", protected("attendance.manage", generateAttendanceMonthlyReport(attendance)))
 	router.HandleFunc("GET /api/attendance/reports/{month}/csv", protected("attendance.reports.read", downloadAttendanceCSV(attendance)))
-	router.HandleFunc("PATCH /api/attendance/days/{id}", protected("attendance.manage", correctAttendanceDay(attendance)))
+	router.HandleFunc("PATCH /api/attendance/days/{id}", protected("attendance.manage", correctAttendanceDay(attendance, security)))
 	router.HandleFunc("GET /api/notifications/types", protected("notifications.read", listNotificationTypes(notifications)))
 	router.HandleFunc("GET /api/notifications", protected("notifications.read", listMyNotifications(notifications)))
 	router.HandleFunc("GET /api/notifications/admin", protected("notifications.manage", listAdminNotifications(notifications)))
-	router.HandleFunc("POST /api/notifications", authenticated(createNotification(notifications)))
+	router.HandleFunc("POST /api/notifications", authenticated(createNotification(notifications, security)))
 	router.HandleFunc("PATCH /api/notifications/{id}", authenticated(updateNotification(notifications)))
 	router.HandleFunc("POST /api/notifications/{id}/hide", authenticated(hideNotification(notifications)))
 	router.HandleFunc("GET /api/notifications/exports/{month}/csv", protected("notifications.export", exportNotificationsCSV(notifications)))
 	router.HandleFunc("GET /api/reports/files", protected("reports.manage", listReportFiles(reports)))
-	router.HandleFunc("GET /api/reports/files/{path...}", protected("reports.manage", downloadReportFile(reports)))
+	router.HandleFunc("GET /api/reports/files/{path...}", protected("reports.manage", downloadReportFile(reports, security)))
 	router.HandleFunc("DELETE /api/reports/files/{path...}", protected("reports.manage", deleteReportFile(reports)))
 	router.HandleFunc("GET /api/templates", protected("templates.read", listTemplates(templates)))
 	router.HandleFunc("POST /api/templates", protected("templates.upload", uploadTemplate(templates)))
@@ -160,6 +160,15 @@ func InitRouter(router *http.ServeMux, users *system.UserService, attendance *sy
 	router.HandleFunc("POST /api/crm/points-earning-rules", protected("crm.manage", createCRMPointsEarningRule(crm)))
 	router.HandleFunc("PATCH /api/crm/points-earning-rules/{id}", protected("crm.manage", updateCRMPointsEarningRule(crm)))
 	router.HandleFunc("POST /api/crm/points-ledger", protected("crm.points.manage", postCRMPointsLedgerEntry(crm)))
+	router.HandleFunc("GET /api/security/events", protected("security.events.read", listSecurityEvents(security)))
+	router.HandleFunc("GET /api/security/rules", protected("security.events.read", listSecurityRules(security)))
+	router.HandleFunc("PATCH /api/security/rules/{key}", protected("security.rules.manage", updateSecurityRule(security)))
+	router.HandleFunc("GET /api/security/settings", protected("security.events.read", getSecuritySettings(security)))
+	router.HandleFunc("PATCH /api/security/settings", protected("security.rules.manage", updateSecuritySettings(security)))
+	router.HandleFunc("GET /api/security/recipients", protected("security.alerts.manage", listSecurityRecipients(security)))
+	router.HandleFunc("POST /api/security/recipients", protected("security.alerts.manage", addSecurityRecipient(security)))
+	router.HandleFunc("DELETE /api/security/recipients/{id}", protected("security.alerts.manage", removeSecurityRecipient(security)))
+	router.HandleFunc("POST /api/security/test-alert", protected("security.alerts.manage", sendSecurityTestAlert(security)))
 
 	// Keep unknown API paths inside the API layer instead of falling through to
 	// the SPA handler.

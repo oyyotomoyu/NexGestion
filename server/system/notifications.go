@@ -225,6 +225,73 @@ func (s *NotificationService) Create(ctx context.Context, senderUserID string, i
 	return s.Get(ctx, id)
 }
 
+// SystemAlertInput is a platform-originated notification (SIEM.md Section 8),
+// not a human-submitted one - it targets an explicit list of user IDs
+// directly rather than going through an audience-scope input.
+type SystemAlertInput struct {
+	Title         string
+	Message       string
+	TypeCode      string
+	TargetUserIDs []string
+}
+
+// CreateSystemAlert writes the same notifications/notification_audiences/
+// notification_events rows as Create, but skips authorizeNotification: the
+// caller is the platform's own SecurityService, not a human sender who must
+// hold notifications.type.*/notifications.send.* permissions. The sender of
+// record is the protected initial administrator, consistent with how other
+// system-seeded rows (e.g. notification_types) attribute to adminUserID.
+func (s *NotificationService) CreateSystemAlert(ctx context.Context, input SystemAlertInput) (*Notification, error) {
+	title, message := strings.TrimSpace(input.Title), strings.TrimSpace(input.Message)
+	if title == "" || message == "" || len(input.TargetUserIDs) == 0 {
+		return nil, ErrNotificationInvalid
+	}
+	db, err := s.open()
+	if err != nil {
+		return nil, err
+	}
+	defer db.Close()
+	tx, err := db.BeginTx(ctx, nil)
+	if err != nil {
+		return nil, err
+	}
+	defer tx.Rollback()
+	typ, err := notificationTypeByCode(ctx, tx, input.TypeCode)
+	if err != nil {
+		return nil, err
+	}
+	now := s.now().UTC()
+	stamp := now.Format(time.RFC3339)
+	showUntil, retainUntil, err := notificationWindow(now, "month")
+	if err != nil {
+		return nil, err
+	}
+	id := uuid.NewString()
+	if _, err := tx.ExecContext(ctx, `INSERT INTO notifications
+		(id,sender_user_id,title,message,type_id,status,show_from,show_until,retain_until,duration_code,created_at,updated_at)
+		VALUES(?,?,?,?,?,'active',?,?,?,'month',?,?)`,
+		id, adminUserID, title, message, typ.ID, stamp, showUntil, retainUntil, stamp, stamp); err != nil {
+		return nil, err
+	}
+	audiences := make([]NotificationAudienceInput, 0, len(input.TargetUserIDs))
+	for _, userID := range input.TargetUserIDs {
+		audiences = append(audiences, NotificationAudienceInput{Scope: "user", TargetUserID: userID})
+	}
+	if err := replaceNotificationAudiences(ctx, tx, id, audiences, stamp); err != nil {
+		return nil, err
+	}
+	if err := insertNotificationEvent(ctx, tx, id, adminUserID, "created", stamp, nil); err != nil {
+		return nil, err
+	}
+	if err := insertNotificationEvent(ctx, tx, id, adminUserID, "published", stamp, nil); err != nil {
+		return nil, err
+	}
+	if err := tx.Commit(); err != nil {
+		return nil, err
+	}
+	return s.Get(ctx, id)
+}
+
 func (s *NotificationService) Update(ctx context.Context, actorUserID, id string, input UpdateNotificationInput) (*Notification, error) {
 	db, err := s.open()
 	if err != nil {

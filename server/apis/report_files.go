@@ -28,7 +28,7 @@ func listReportFiles(reports *system.ReportFileService) http.HandlerFunc {
 	}
 }
 
-func downloadReportFile(reports *system.ReportFileService) http.HandlerFunc {
+func downloadReportFile(reports *system.ReportFileService, security *system.SecurityService) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		relative := strings.TrimSpace(r.PathValue("path"))
 		path, err := reports.Path(relative)
@@ -36,6 +36,14 @@ func downloadReportFile(reports *system.ReportFileService) http.HandlerFunc {
 			writeReportFileError(w, err)
 			return
 		}
+		recordRequestLog(r, "info", "downloaded report file "+relative)
+		// Feeds the mass-export/data-exfiltration rule (SIEM.md Section 6) -
+		// this was the one existing action in the wiring list with no audit
+		// trail at all until now.
+		_, _ = security.RecordEvent(r.Context(), system.SecurityEventInput{
+			EventType: "report_download", Severity: "info", ActorUserID: authenticatedUserID(r), SourceIP: clientIP(r),
+			Module: "reports", RecordRef: relative, Summary: "downloaded report file " + relative,
+		})
 		w.Header().Set("Content-Disposition", `attachment; filename="`+filepath.Base(path)+`"`)
 		http.ServeFile(w, r, path)
 	}

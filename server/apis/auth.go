@@ -16,7 +16,7 @@ const refreshCookieName = "nexgestion_refresh_token"
 
 type authContextKey struct{}
 
-func login(auth *system.AuthService, logService *applogs.Service) http.HandlerFunc {
+func login(auth *system.AuthService, users *system.UserService, security *system.SecurityService, logService *applogs.Service) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		var input struct {
 			Email    string `json:"email"`
@@ -29,13 +29,39 @@ func login(auth *system.AuthService, logService *applogs.Service) http.HandlerFu
 		tokens, err := auth.Login(r.Context(), input.Email, input.Password, clientIP(r), r.UserAgent())
 		if err != nil {
 			_ = logService.With(clientIP(r), "").Log("warning", "login failed")
+			_, _ = security.RecordEvent(r.Context(), system.SecurityEventInput{
+				EventType: "login_failed", Severity: "warning", SourceIP: clientIP(r),
+				Module: "users", RecordRef: input.Email, Summary: "failed login attempt for " + input.Email,
+			})
 			writeAuthError(w, err)
 			return
 		}
 		_ = logService.With(clientIP(r), tokens.UserID).Log("info", "login succeeded")
+		privileged := false
+		if keys, err := users.EffectivePermissionKeys(r.Context(), tokens.UserID); err == nil {
+			for _, key := range keys {
+				if isPrivilegedPermissionKey(key) {
+					privileged = true
+					break
+				}
+			}
+		}
+		_, _ = security.RecordEvent(r.Context(), system.SecurityEventInput{
+			EventType: "login_succeeded", Severity: "info", ActorUserID: tokens.UserID, SourceIP: clientIP(r),
+			Module: "users", Summary: "login succeeded", Privileged: privileged,
+		})
 		setRefreshCookie(w, r, tokens.RefreshToken, int(system.RefreshTokenLifetime.Seconds()))
 		writeTokenResponse(w, tokens)
 	}
+}
+
+// isPrivilegedPermissionKey mirrors the security package's own
+// isEscalationPermission notion of "privileged": any *.manage/*.configure
+// permission, or the two special-cased keys, feeds the
+// new-device-privileged-login rule (SIEM.md Section 6).
+func isPrivilegedPermissionKey(key string) bool {
+	return key == "permissions.assign" || key == "roles.manage" ||
+		strings.HasSuffix(key, ".manage") || strings.HasSuffix(key, ".configure")
 }
 
 func refresh(auth *system.AuthService, logService *applogs.Service) http.HandlerFunc {

@@ -46,6 +46,58 @@ func (s *UserService) EffectivePermissionKeys(ctx context.Context, userID string
 	return keys, rows.Err()
 }
 
+// UsersWithPermission returns every active user whose effective permissions
+// (role union, same rule as EffectivePermissionKeys) include the given key -
+// the inverse lookup EffectivePermissionKeys does per-user. The protected
+// initial administrator is always included, mirroring
+// resolveAdministratorApproval's is_protected=1 OR grants_all_permissions=1
+// treatment (leave_approval_resolver.go).
+func (s *UserService) UsersWithPermission(ctx context.Context, permissionKey string) ([]User, error) {
+	db, err := s.open()
+	if err != nil {
+		return nil, err
+	}
+	defer db.Close()
+	rows, err := db.QueryContext(ctx, `SELECT DISTINCT u.id FROM users u
+		LEFT JOIN user_roles ur ON ur.user_id = u.id
+		LEFT JOIN roles r ON r.id = ur.role_id
+		WHERE u.status = 'active' AND u.deleted_at IS NULL
+			AND (
+				u.is_protected = 1
+				OR r.grants_all_permissions = 1
+				OR EXISTS (
+					SELECT 1 FROM role_permissions rp
+					JOIN permissions p ON p.id = rp.permission_id
+					WHERE rp.role_id = r.id AND p.permission_key = ?
+				)
+			)
+		ORDER BY u.id`, permissionKey)
+	if err != nil {
+		return nil, err
+	}
+	var ids []string
+	for rows.Next() {
+		var id string
+		if err := rows.Scan(&id); err != nil {
+			rows.Close()
+			return nil, err
+		}
+		ids = append(ids, id)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	users := make([]User, 0, len(ids))
+	for _, id := range ids {
+		user, err := getUser(ctx, db, id)
+		if err != nil {
+			return nil, err
+		}
+		users = append(users, *user)
+	}
+	return users, nil
+}
+
 func (s *UserService) ListPermissions(ctx context.Context, query ListQuery) (ListResult[Permission], error) {
 	query, sortExpression, err := NormalizeListQuery(query, "permission_key", "asc", map[string]string{
 		"permission_key": "permission_key",
@@ -97,6 +149,19 @@ func (s *UserService) ListPermissions(ctx context.Context, query ListQuery) (Lis
 		return ListResult[Permission]{}, err
 	}
 	return NewListResult(result, query, total), nil
+}
+
+// GetPermission looks up a permission by its database id - used by the API
+// layer to resolve the permission key a role grant refers to (the
+// SetRolePermission route only receives the id), so it can pass that key to
+// the security event's privilege-escalation check.
+func (s *UserService) GetPermission(ctx context.Context, id string) (*Permission, error) {
+	db, err := s.open()
+	if err != nil {
+		return nil, err
+	}
+	defer db.Close()
+	return getPermission(ctx, db, id)
 }
 
 func getPermission(ctx context.Context, db *sql.DB, id string) (*Permission, error) {
