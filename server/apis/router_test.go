@@ -36,12 +36,13 @@ func testRouter(t *testing.T) *http.ServeMux {
 	checkout := system.NewCheckoutService(directory, users, crm)
 	finance := system.NewFinanceService(directory, users)
 	security := system.NewSecurityService(directory, users, notifications)
+	hr := system.NewHRService(directory, users, notifications)
 	logService, err := applogs.NewService(t.TempDir(), time.UTC)
 	if err != nil {
 		t.Fatal(err)
 	}
 	t.Cleanup(logService.Close)
-	InitRouter(router, users, attendance, notifications, reports, templates, salary, approvals, checkout, crm, finance, security, system.NewAuthService(users), logService)
+	InitRouter(router, users, attendance, notifications, reports, templates, salary, approvals, checkout, crm, finance, security, hr, system.NewAuthService(users), logService)
 	return router
 }
 
@@ -1110,6 +1111,94 @@ func TestSalaryCompensationRecordAPI(t *testing.T) {
 	}
 	if len(listBody.CompensationRecords) != 1 || listBody.CompensationRecords[0].ID != record.ID {
 		t.Fatalf("expected one compensation record, got %+v", listBody.CompensationRecords)
+	}
+}
+
+func TestHRAPI(t *testing.T) {
+	router := testRouter(t)
+	adminToken, _ := loginForTest(t, router)
+
+	userResponse := serveAuthorized(router, http.MethodPost, "/api/users", []byte(`{
+		"display_name":"HR Employee",
+		"email":"hr-employee@example.com",
+		"password":"a-secure-user-password"
+	}`), adminToken)
+	if userResponse.Code != http.StatusCreated {
+		t.Fatalf("create employee: %d %s", userResponse.Code, userResponse.Body.String())
+	}
+	var employee system.User
+	if err := json.NewDecoder(userResponse.Body).Decode(&employee); err != nil {
+		t.Fatal(err)
+	}
+	loginResponse := serve(router, http.MethodPost, "/api/auth/login", []byte(`{
+		"email":"hr-employee@example.com",
+		"password":"a-secure-user-password"
+	}`))
+	var login struct {
+		AccessToken string `json:"access_token"`
+	}
+	if err := json.NewDecoder(loginResponse.Body).Decode(&login); err != nil {
+		t.Fatal(err)
+	}
+
+	eventPath := "/api/hr/employees/" + employee.ID + "/employment-events"
+	onboard := []byte(`{"event_type":"onboarded","effective_date":"2026-01-05","employee_number":"E-100",
+		"tasks":[{"title":"Issue badge"}]}`)
+	if response := serveAuthorized(router, http.MethodPost, eventPath, onboard, login.AccessToken); response.Code != http.StatusForbidden {
+		t.Fatalf("employee without hr.employment.manage: expected %d, got %d %s", http.StatusForbidden, response.Code, response.Body.String())
+	}
+	response := serveAuthorized(router, http.MethodPost, eventPath, onboard, adminToken)
+	if response.Code != http.StatusCreated {
+		t.Fatalf("onboard: %d %s", response.Code, response.Body.String())
+	}
+	if response := serveAuthorized(router, http.MethodPost, eventPath, []byte(`{"event_type":"reinstated","effective_date":"2026-02-01"}`), adminToken); response.Code != http.StatusConflict {
+		t.Fatalf("invalid transition: expected %d, got %d %s", http.StatusConflict, response.Code, response.Body.String())
+	}
+
+	recordResponse := serveAuthorized(router, http.MethodGet, "/api/hr/employees/"+employee.ID+"/employment", nil, adminToken)
+	if recordResponse.Code != http.StatusOK {
+		t.Fatalf("employment record: %d %s", recordResponse.Code, recordResponse.Body.String())
+	}
+	var record system.EmploymentRecord
+	if err := json.NewDecoder(recordResponse.Body).Decode(&record); err != nil {
+		t.Fatal(err)
+	}
+	if record.EmploymentStatus == nil || *record.EmploymentStatus != "probation" || len(record.Events) != 1 || record.ProbationEndDate == nil {
+		t.Fatalf("unexpected employment record: %+v", record)
+	}
+
+	tasksResponse := serveAuthorized(router, http.MethodGet, "/api/hr/employees/"+employee.ID+"/tasks", nil, adminToken)
+	if tasksResponse.Code != http.StatusOK || !strings.Contains(tasksResponse.Body.String(), "Issue badge") {
+		t.Fatalf("list tasks: %d %s", tasksResponse.Code, tasksResponse.Body.String())
+	}
+
+	cycleResponse := serveAuthorized(router, http.MethodPost, "/api/hr/performance/cycles",
+		[]byte(`{"name":"2026 H1","start_date":"2026-01-01","end_date":"2026-06-30"}`), adminToken)
+	if cycleResponse.Code != http.StatusCreated {
+		t.Fatalf("create cycle: %d %s", cycleResponse.Code, cycleResponse.Body.String())
+	}
+
+	caseResponse := serveAuthorized(router, http.MethodPost, "/api/hr/employee-relations/cases",
+		[]byte(`{"case_type":"disciplinary","subject_user_id":"`+employee.ID+`","summary":"policy violation"}`), adminToken)
+	if caseResponse.Code != http.StatusCreated {
+		t.Fatalf("create case: %d %s", caseResponse.Code, caseResponse.Body.String())
+	}
+	var created system.EmployeeRelationsCase
+	if err := json.NewDecoder(caseResponse.Body).Decode(&created); err != nil {
+		t.Fatal(err)
+	}
+	if response := serveAuthorized(router, http.MethodGet, "/api/hr/employee-relations/cases/"+created.ID, nil, login.AccessToken); response.Code != http.StatusForbidden {
+		t.Fatalf("employee without hr.access: expected %d, got %d %s", http.StatusForbidden, response.Code, response.Body.String())
+	}
+	transition := serveAuthorized(router, http.MethodPost, "/api/hr/employee-relations/cases/"+created.ID+"/transitions",
+		[]byte(`{"action":"investigate"}`), adminToken)
+	if transition.Code != http.StatusOK || !strings.Contains(transition.Body.String(), `"status":"investigating"`) {
+		t.Fatalf("investigate: %d %s", transition.Code, transition.Body.String())
+	}
+
+	settings := serveAuthorized(router, http.MethodPatch, "/api/hr/settings", []byte(`{"probation_default_days":60}`), adminToken)
+	if settings.Code != http.StatusOK || !strings.Contains(settings.Body.String(), `"probation_default_days":60`) {
+		t.Fatalf("update settings: %d %s", settings.Code, settings.Body.String())
 	}
 }
 

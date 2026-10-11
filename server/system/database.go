@@ -50,6 +50,7 @@ var RequiredDatabases = []DatabaseSpec{
 	crmDatabaseSpec(),
 	financeDatabaseSpec(),
 	securityDatabaseSpec(),
+	hrDatabaseSpec(),
 }
 
 // syncSystemSettingsDefaults inserts default settings that were added after a

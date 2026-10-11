@@ -12,7 +12,7 @@ import (
 // API handlers belong in this package and may call the system package to
 // perform application operations. The router itself is only responsible for
 // directing requests to the correct handler.
-func InitRouter(router *http.ServeMux, users *system.UserService, attendance *system.AttendanceService, notifications *system.NotificationService, reports *system.ReportFileService, templates *system.TemplateService, salary *system.SalaryService, approvals *system.ApprovalService, checkout *system.CheckoutService, crm *system.CRMService, finance *system.FinanceService, security *system.SecurityService, auth *system.AuthService, logService *applogs.Service) {
+func InitRouter(router *http.ServeMux, users *system.UserService, attendance *system.AttendanceService, notifications *system.NotificationService, reports *system.ReportFileService, templates *system.TemplateService, salary *system.SalaryService, approvals *system.ApprovalService, checkout *system.CheckoutService, crm *system.CRMService, finance *system.FinanceService, security *system.SecurityService, hr *system.HRService, auth *system.AuthService, logService *applogs.Service) {
 	catalog, err := system.LoadPermissionCatalog()
 	if err != nil {
 		panic("load permission catalog: " + err.Error())
@@ -169,6 +169,37 @@ func InitRouter(router *http.ServeMux, users *system.UserService, attendance *sy
 	router.HandleFunc("POST /api/security/recipients", protected("security.alerts.manage", addSecurityRecipient(security)))
 	router.HandleFunc("DELETE /api/security/recipients/{id}", protected("security.alerts.manage", removeSecurityRecipient(security)))
 	router.HandleFunc("POST /api/security/test-alert", protected("security.alerts.manage", sendSecurityTestAlert(security)))
+	router.HandleFunc("GET /api/hr/settings", protected("hr.access", getHRSettings(hr)))
+	router.HandleFunc("PATCH /api/hr/settings", protected("hr.access", updateHRSettings(hr, users)))
+	router.HandleFunc("GET /api/hr/me/employment", protected("hr.employment.read.self", getEmploymentRecord(hr, true)))
+	router.HandleFunc("GET /api/hr/employees/{userId}/employment", protected("hr.employment.read", getEmploymentRecord(hr, false)))
+	router.HandleFunc("POST /api/hr/employees/{userId}/employment-events", protected("hr.employment.manage", recordEmploymentEvent(hr, users)))
+	router.HandleFunc("GET /api/hr/employees/{userId}/tasks", protected("hr.tasks.manage", listHRTasks(hr, false)))
+	router.HandleFunc("POST /api/hr/employees/{userId}/tasks", protected("hr.tasks.manage", createHRTask(hr, users)))
+	router.HandleFunc("PATCH /api/hr/tasks/{id}", protected("hr.tasks.manage", updateHRTask(hr, users, false)))
+	router.HandleFunc("GET /api/hr/me/assigned-tasks", protected("hr.access", listHRTasks(hr, true)))
+	router.HandleFunc("PATCH /api/hr/me/assigned-tasks/{id}", protected("hr.access", updateHRTask(hr, users, true)))
+	router.HandleFunc("GET /api/hr/performance/cycles", protected("hr.performance.read.self", listPerformanceCycles(hr)))
+	router.HandleFunc("POST /api/hr/performance/cycles", protected("hr.performance.cycles.manage", createPerformanceCycle(hr, users)))
+	router.HandleFunc("PATCH /api/hr/performance/cycles/{id}", protected("hr.performance.cycles.manage", updatePerformanceCycle(hr, users)))
+	router.HandleFunc("GET /api/hr/performance/me/goals", protected("hr.performance.read.self", listPerformanceGoals(hr, users, true)))
+	router.HandleFunc("POST /api/hr/performance/me/goals", protected("hr.performance.read.self", createPerformanceGoal(hr, users, true)))
+	router.HandleFunc("GET /api/hr/performance/employees/{userId}/goals", protected("hr.performance.read", listPerformanceGoals(hr, users, false)))
+	router.HandleFunc("POST /api/hr/performance/employees/{userId}/goals", protected("hr.performance.review", createPerformanceGoal(hr, users, false)))
+	router.HandleFunc("PATCH /api/hr/performance/goals/{id}", protected("hr.access", updatePerformanceGoal(hr, users)))
+	router.HandleFunc("GET /api/hr/performance/me/reviews", protected("hr.performance.read.self", listPerformanceReviews(hr, users, true)))
+	router.HandleFunc("PUT /api/hr/performance/me/reviews/{cycleId}/self-review", protected("hr.performance.read.self", submitSelfReview(hr, users)))
+	router.HandleFunc("GET /api/hr/performance/employees/{userId}/reviews", protected("hr.performance.read", listPerformanceReviews(hr, users, false)))
+	router.HandleFunc("PUT /api/hr/performance/employees/{userId}/reviews/{cycleId}/manager-review", protected("hr.performance.review", submitManagerReview(hr, users)))
+	router.HandleFunc("POST /api/hr/performance/employees/{userId}/reviews/{cycleId}/finalize", protected("hr.performance.review", finalizePerformanceReview(hr, users)))
+	router.HandleFunc("POST /api/hr/performance/reviews/{id}/corrections", protected("hr.performance.review", correctPerformanceReview(hr, users)))
+	router.HandleFunc("GET /api/hr/employee-relations/me/cases", protected("hr.employee_relations.read.self", listMyEmployeeRelationsCases(hr, users)))
+	router.HandleFunc("POST /api/hr/employee-relations/me/grievances", protected("hr.employee_relations.read.self", fileGrievance(hr, users)))
+	router.HandleFunc("GET /api/hr/employee-relations/cases", protected("hr.access", listEmployeeRelationsCases(hr, users)))
+	router.HandleFunc("POST /api/hr/employee-relations/cases", protected("hr.employee_relations.manage", createEmployeeRelationsCase(hr, users)))
+	router.HandleFunc("GET /api/hr/employee-relations/cases/{id}", protected("hr.access", getEmployeeRelationsCase(hr, users)))
+	router.HandleFunc("PATCH /api/hr/employee-relations/cases/{id}", protected("hr.employee_relations.manage", updateEmployeeRelationsCase(hr, users)))
+	router.HandleFunc("POST /api/hr/employee-relations/cases/{id}/transitions", protected("hr.employee_relations.manage", transitionEmployeeRelationsCase(hr, users)))
 
 	// Keep unknown API paths inside the API layer instead of falling through to
 	// the SPA handler.
