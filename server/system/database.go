@@ -51,6 +51,10 @@ var RequiredDatabases = []DatabaseSpec{
 	financeDatabaseSpec(),
 	securityDatabaseSpec(),
 	hrDatabaseSpec(),
+	inventoryDatabaseSpec(),
+	operationsDatabaseSpec("order.db"),
+	operationsDatabaseSpec("procurement.db"),
+	operationsDatabaseSpec("production.db"),
 }
 
 // syncSystemSettingsDefaults inserts default settings that were added after a

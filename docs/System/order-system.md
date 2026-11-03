@@ -2,6 +2,10 @@
 
 ## 1. Purpose
 
+User-facing instructions are in [Orders and quotes](../UserApp/orders.md).
+
+The standalone core backend, Order/Quote screens and optional Inventory integration are implemented. See [Operations backend](../Development/operations-backend.md) for API contracts, workflow rules and remaining scope. The design notes below include future optional integrations.
+
 This document collects the design considerations for a future Order module, covering its four core functions: **customers**, **quotes**, **orders**, and **shipment**. It is a planning checklist, not an implementation spec, following the same convention as [`salary-system.md`](./salary-system.md).
 
 Order is one of four modules in the Operations System family — see [`operations-system.md`](./operations-system.md) for the shared Module Independence Principle and a cross-module overview. Order needs no other module installed to function: a service business can run it with plain-text line items and no stock, inventory, or finance linkage at all.

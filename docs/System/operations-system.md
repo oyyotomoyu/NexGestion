@@ -2,6 +2,8 @@
 
 ## 1. Purpose
 
+The Order, Procurement and Production core APIs are implemented, including optional Inventory posting and Checkout stock deduction. See [Operations backend](../Development/operations-backend.md) for the current API and remaining scope.
+
 This document is the index for five independently documented operational modules:
 
 - [`order-system.md`](./order-system.md)

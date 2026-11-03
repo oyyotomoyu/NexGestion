@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 
+import { htmlLanguages, isAppLanguage } from "@/locales/languages";
 import { useAuth } from "@/auth/AuthProvider";
 import { NexButton } from "@/components/NexButton";
 import { NexInput } from "@/components/NexInput";
@@ -10,17 +11,19 @@ import {
   hideNotification,
   listAdminNotifications,
   listNotifications,
-  notificationCSVURL,
+  downloadNotificationCSV,
 } from "@/requests/notifications";
 import type { Notification, NotificationAudience } from "@/requests/notifications/types";
 import type { User } from "@/requests/users/types";
 
+import Compose from "./Compose";
 import "./style.css";
 
 type ViewMode = "inbox" | "all";
 
 function currentMonth() {
-  return new Date().toLocaleDateString("en-CA").slice(0, 7);
+  const date = new Date();
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}`;
 }
 
 function hasPermission(user: User | null, key: string) {
@@ -68,7 +71,14 @@ function sortNotifications(items: Notification[]) {
 export default function Notifications() {
   const { i18n, t } = useTranslation("ui");
   const { user } = useAuth();
-  const locale = i18n.resolvedLanguage || navigator.language;
+  const language = i18n.resolvedLanguage;
+  const locale = isAppLanguage(language || null) ? htmlLanguages[(language || "ENG") as keyof typeof htmlLanguages] : navigator.language;
+  const canExport = hasPermission(user, "notifications.export");
+  const canSend = ["notifications.send.organization", "notifications.send.group", "notifications.send.own_group"].some(key => hasPermission(user, key));
+  const [composing, setComposing] = useState(false);
+  const [editing, setEditing] = useState<Notification | null>(null);
+  const [revision, setRevision] = useState(0);
+  const [exporting, setExporting] = useState(false);
   const canSeeAll = hasPermission(user, "notifications.manage");
   const [mode, setMode] = useState<ViewMode>("inbox");
   const [items, setItems] = useState<Notification[]>([]);
@@ -87,9 +97,8 @@ export default function Notifications() {
 
   useEffect(() => {
     let mounted = true;
-    async function load() {
-      setLoading(true);
-      setError(null);
+    async function load(initial = false) {
+      if (initial) { setLoading(true); setError(null); }
       try {
         const result =
           visibleMode === "all" ? await listAdminNotifications() : await listNotifications();
@@ -100,11 +109,16 @@ export default function Notifications() {
         if (mounted) setLoading(false);
       }
     }
-    void load();
+    void load(true);
+    const timer = window.setInterval(() => { if (document.visibilityState === "visible") void load(); }, 30000);
+    const refresh = () => { if (document.visibilityState === "visible") void load(); };
+    document.addEventListener("visibilitychange", refresh);
     return () => {
+      window.clearInterval(timer);
+      document.removeEventListener("visibilitychange", refresh);
       mounted = false;
     };
-  }, [visibleMode, t]);
+  }, [visibleMode, t, revision]);
 
   const counts = useMemo(
     () => ({
@@ -136,7 +150,7 @@ export default function Notifications() {
           <NexText variant="title">{t("global.k_Notifications_Title")}</NexText>
           <NexText color="muted">{t("global.k_Notifications_Description")}</NexText>
         </div>
-        {canSeeAll && (
+        {canExport && (
           <div className="notifications-export">
             <NexInput
               id="notification-export-month"
@@ -145,13 +159,16 @@ export default function Notifications() {
               value={month}
               onChange={(event) => setMonth(event.target.value)}
             />
-            <a className="notifications-export__link" href={notificationCSVURL(month)}>
-              {t("global.k_Notifications_DownloadCSV")}
-            </a>
+            <NexButton disabled={exporting || !month} onClick={async () => {
+              setExporting(true); setError(null);
+              try { await downloadNotificationCSV(month); } catch { setError(t("global.k_Notifications_ExportError")); } finally { setExporting(false); }
+            }}>{t("global.k_Notifications_DownloadCSV")}</NexButton>
           </div>
         )}
       </header>
 
+      {canSend && <NexButton onClick={() => { setEditing(null); setComposing(true); }}>{t("global.k_Notifications_Compose")}</NexButton>}
+      {composing && <Compose key={editing?.id || "new"} user={user} editing={editing} onCancel={() => {setComposing(false);setEditing(null)}} onSaved={() => {setComposing(false);setEditing(null);setRevision(v => v + 1)}} />}
       <div className="notifications-toolbar" role="tablist" aria-label={t("global.k_Notifications_View")}>
         <button
           className={visibleMode === "inbox" ? "active" : ""}
@@ -208,6 +225,7 @@ export default function Notifications() {
       ) : (
         <div className="notifications-list">
           {items.map((item) => {
+            const canEdit = item.sender_user_id === user?.id && ["active", "edited"].includes(item.status) && canSend;
             const canHide = item.sender_user_id === user?.id && item.status !== "hidden";
             return (
               <article className="notifications-item" key={item.id}>
@@ -223,6 +241,7 @@ export default function Notifications() {
                     </div>
                     <NexText variant="heading">{item.title}</NexText>
                   </div>
+                  {canEdit && <NexButton variant="secondary" size="compact" onClick={() => {setEditing(item);setComposing(true)}}>{t("global.k_Notifications_Edit")}</NexButton>}
                   {canHide && (
                     <NexButton
                       type="button"

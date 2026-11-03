@@ -224,3 +224,25 @@
     width: 100%;
   }
 }
+
+.notifications-compose {
+  display: grid;
+  gap: 16px;
+  padding: 20px;
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+  background: var(--color-surface);
+}
+.notifications-compose__message { display: grid; gap: 8px; }
+.notifications-compose textarea {
+  width: 100%;
+  padding: 12px;
+  box-sizing: border-box;
+  font: inherit;
+  color: var(--color-text);
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+  resize: vertical;
+}
+.notifications-compose__audience { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 12px; }

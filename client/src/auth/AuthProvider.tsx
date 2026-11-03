@@ -29,7 +29,7 @@ interface AuthContextValue {
 }
 
 const AuthContext = createContext<AuthContextValue | null>(null);
-const isDevAuthBypassed = process.env.NODE_ENV !== "production";
+const isDevAuthBypassed = process.env.NODE_ENV !== "production" && import.meta.env.VITE_USE_BACKEND !== "true";
 const devUserId = import.meta.env.VITE_DEV_USER_ID ?? "0";
 
 export function AuthProvider({ children }: { children: ReactNode }) {

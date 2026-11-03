@@ -573,6 +573,46 @@
       "high_risk": true,
       "high_risk_reason": "Can redirect or suppress who is notified of a security incident",
       "requires_password": true
+    },
+    {
+      "key": "inventory.read",
+      "module": "inventory",
+      "description": "View inventory items, warehouses, stock and movement history"
+    },
+    {
+      "key": "inventory.manage",
+      "module": "inventory",
+      "description": "Manage inventory master data, receive and ship goods, transfer and adjust stock"
+    },
+    {
+      "key": "orders.read",
+      "module": "orders",
+      "description": "View documents and history in orders"
+    },
+    {
+      "key": "orders.manage",
+      "module": "orders",
+      "description": "Create, edit drafts and perform business transitions in orders"
+    },
+    {
+      "key": "procurement.read",
+      "module": "procurement",
+      "description": "View documents and history in procurement"
+    },
+    {
+      "key": "procurement.manage",
+      "module": "procurement",
+      "description": "Create, edit drafts and perform business transitions in procurement"
+    },
+    {
+      "key": "production.read",
+      "module": "production",
+      "description": "View documents and history in production"
+    },
+    {
+      "key": "production.manage",
+      "module": "production",
+      "description": "Create, edit drafts and perform business transitions in production"
     }
   ]
 }

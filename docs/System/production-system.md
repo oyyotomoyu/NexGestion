@@ -2,6 +2,8 @@
 
 ## 1. Purpose
 
+The standalone core backend and optional Inventory integration are implemented. See [Operations backend](../Development/operations-backend.md) for API contracts, workflow rules and remaining scope. The design notes below include future optional integrations.
+
 This document collects the design considerations for a future Production module: the core record of a manufacturing/assembly run — what was produced, from what, and whether it's done. It is a planning checklist, not an implementation spec, following the same convention as [`salary-system.md`](./salary-system.md).
 
 Production is one of four modules in the Operations System family — see [`operations-system.md`](./operations-system.md) for the shared Module Independence Principle and a cross-module overview — and the one most likely to be entirely absent from a deployment, since it only applies to manufacturers or light assemblers. It is kept intentionally minimal: no routing, no multi-level bill of materials, no work-center scheduling.

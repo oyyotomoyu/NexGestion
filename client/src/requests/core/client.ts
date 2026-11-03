@@ -59,6 +59,15 @@ export async function request<TResponse>(
   return parseResponse<TResponse>(response);
 }
 
+export async function requestBlob(path: string): Promise<Blob> {
+  let response = await send(path, {}, true);
+  if (response.status === 401 && await refreshAccessToken()) {
+    response = await send(path, {}, true);
+  }
+  if (!response.ok) throw new ApiError(response.status, await readErrorBody(response));
+  return response.blob();
+}
+
 async function send(path: string, init: RequestInit, auth: boolean) {
   const headers = new Headers(init.headers);
   const isFormData = typeof FormData !== "undefined" && init.body instanceof FormData;

@@ -13,6 +13,9 @@ import Notifications from "@/views/Notifications";
 import Salary from "@/views/Salary";
 import SalaryEmployees from "@/views/SalaryEmployees";
 import Templates from "@/views/Templates";
+import Inventory, { inventoryPages } from "@/views/Inventory";
+import OrdersList from "@/views/Orders/List";
+import OrderDetail from "@/views/Orders/Detail";
 import Settings from "@/views/Settings";
 import Roles from "@/views/Settings/Roles";
 import RoleDetail from "@/views/Settings/Roles/RoleDetail";
@@ -50,6 +53,15 @@ const routes: RouteObject[] = [
       </ProtectedRoute>
     ),
     children: [
+      ...(["order", "quote"] as const).flatMap(kind => {
+        const path = kind === "quote" ? "quotes" : "orders";
+        return [
+          {path, element:<ProtectedRoute permission="orders.access"><ProtectedRoute permission="orders.read"><OrdersList key={kind} kind={kind}/></ProtectedRoute></ProtectedRoute>},
+          {path:`${path}/:id`, element:<ProtectedRoute permission="orders.access"><ProtectedRoute permission="orders.read"><OrderDetail key={kind} kind={kind}/></ProtectedRoute></ProtectedRoute>},
+        ];
+      }),
+      { path: "inventory", element: <Navigate to="/inventory/stock" replace /> },
+      ...inventoryPages.map(([page]) => ({ path: `inventory/${page}`, element: <ProtectedRoute permission="inventory.access"><Inventory page={page} /></ProtectedRoute> })),
       {
         index: true,
         element: <Navigate to="/dashboard" replace />,

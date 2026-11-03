@@ -1,4 +1,4 @@
-import { request } from "@/requests/core/client";
+import { request, requestBlob } from "@/requests/core/client";
 import { buildListPath, listItems, type ListQuery, type ListResponse } from "@/requests/core/list";
 import type {
   CreateNotificationInput,
@@ -104,7 +104,7 @@ function retainUntil(showUntil: string | null) {
 }
 
 export async function listNotificationTypes(query: ListQuery = {}) {
-  if (process.env.NODE_ENV !== "production") {
+  if (process.env.NODE_ENV !== "production" && import.meta.env.VITE_USE_BACKEND !== "true") {
     return [...mockTypes];
   }
   const response = await request<ListResponse<NotificationType, "notification_types">>(
@@ -114,7 +114,7 @@ export async function listNotificationTypes(query: ListQuery = {}) {
 }
 
 export async function listNotifications(query: ListQuery = {}) {
-  if (process.env.NODE_ENV !== "production") {
+  if (process.env.NODE_ENV !== "production" && import.meta.env.VITE_USE_BACKEND !== "true") {
     const now = Date.now();
     return mockNotifications.filter(
       (item) =>
@@ -130,7 +130,7 @@ export async function listNotifications(query: ListQuery = {}) {
 }
 
 export async function listAdminNotifications(query: ListQuery = {}) {
-  if (process.env.NODE_ENV !== "production") {
+  if (process.env.NODE_ENV !== "production" && import.meta.env.VITE_USE_BACKEND !== "true") {
     return [...mockNotifications];
   }
   const response = await request<ListResponse<Notification, "notifications">>(
@@ -140,7 +140,7 @@ export async function listAdminNotifications(query: ListQuery = {}) {
 }
 
 export async function createNotification(input: CreateNotificationInput) {
-  if (process.env.NODE_ENV !== "production") {
+  if (process.env.NODE_ENV !== "production" && import.meta.env.VITE_USE_BACKEND !== "true") {
     const type = mockTypes.find((item) => item.code === input.type);
     if (!type) throw new Error(`Mock notification type ${input.type} was not found`);
     const showUntil = addDuration(input.show_time);
@@ -173,7 +173,7 @@ export async function createNotification(input: CreateNotificationInput) {
 }
 
 export async function updateNotification(id: string, input: UpdateNotificationInput) {
-  if (process.env.NODE_ENV !== "production") {
+  if (process.env.NODE_ENV !== "production" && import.meta.env.VITE_USE_BACKEND !== "true") {
     const index = mockNotifications.findIndex((item) => item.id === id);
     if (index < 0) throw new Error(`Mock notification ${id} was not found`);
     const current = mockNotifications[index];
@@ -205,7 +205,7 @@ export async function updateNotification(id: string, input: UpdateNotificationIn
 }
 
 export function hideNotification(id: string) {
-  if (process.env.NODE_ENV !== "production") {
+  if (process.env.NODE_ENV !== "production" && import.meta.env.VITE_USE_BACKEND !== "true") {
     const now = nowISO();
     mockNotifications = mockNotifications.map((item) =>
       item.id === id
@@ -221,4 +221,17 @@ export function hideNotification(id: string) {
 
 export function notificationCSVURL(month: string) {
   return `/api/notifications/exports/${encodeURIComponent(month)}/csv`;
+}
+
+export async function downloadNotificationCSV(month: string) {
+  if (!/^\d{4}-(0[1-9]|1[0-2])$/.test(month)) throw new Error("Invalid export month");
+  const blob = await requestBlob(notificationCSVURL(month));
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = `notifications-${month}.csv`;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  window.setTimeout(() => URL.revokeObjectURL(url), 1000);
 }

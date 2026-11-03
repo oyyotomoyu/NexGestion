@@ -174,9 +174,9 @@ func writeCheckoutError(w http.ResponseWriter, err error) {
 	switch {
 	case errors.Is(err, system.ErrCheckoutNotFound):
 		code, status = "checkout_not_found", http.StatusNotFound
-	case errors.Is(err, system.ErrCheckoutInvalid), errors.Is(err, system.ErrInvalidListQuery):
+	case errors.Is(err, system.ErrInventoryInvalid), errors.Is(err, system.ErrCheckoutInvalid), errors.Is(err, system.ErrInvalidListQuery):
 		code, status = "checkout_invalid_input", http.StatusBadRequest
-	case errors.Is(err, system.ErrCheckoutState):
+	case errors.Is(err, system.ErrInventoryState), errors.Is(err, system.ErrCheckoutState):
 		code, status = "checkout_invalid_state", http.StatusConflict
 	case errors.Is(err, system.ErrUserNotFound):
 		code, status = "checkout_user_not_found", http.StatusNotFound

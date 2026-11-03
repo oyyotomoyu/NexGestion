@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"math/big"
+	"os"
 	"path/filepath"
 	"regexp"
 	"strings"
@@ -158,8 +159,10 @@ type CreateCheckoutPromotionRuleInput struct {
 }
 
 type CheckoutScanResolution struct {
-	Type   string          `json:"type"`
-	Coupon *CheckoutCoupon `json:"coupon,omitempty"`
+	Item       *InventoryEntity `json:"item,omitempty"`
+	Membership *CRMMembership   `json:"membership,omitempty"`
+	Type       string           `json:"type"`
+	Coupon     *CheckoutCoupon  `json:"coupon,omitempty"`
 }
 
 type CheckoutService struct {
@@ -182,16 +185,11 @@ func NewCheckoutService(databaseDirectory string, users *UserService, crm *CRMSe
 }
 
 func (s *CheckoutService) open() (*sql.DB, error) {
-	db, err := sql.Open("sqlite", s.databasePath)
+	db, err := openOperationsDB(s.databasePath)
 	if err != nil {
 		return nil, err
 	}
-	db.SetMaxOpenConns(1)
-	if _, err := db.Exec(`PRAGMA busy_timeout = 5000`); err != nil {
-		db.Close()
-		return nil, err
-	}
-	if _, err := db.Exec(`PRAGMA foreign_keys = ON`); err != nil {
+	if _, err = attachInventory(context.Background(), db, filepath.Dir(s.databasePath)); err != nil {
 		db.Close()
 		return nil, err
 	}
@@ -355,16 +353,21 @@ func (s *CheckoutService) CompleteTransaction(ctx context.Context, transactionID
 		if err := tx.QueryRowContext(ctx, `SELECT total_amount FROM checkout_transactions WHERE id=?`, transactionID).Scan(&total); err != nil {
 			return err
 		}
-		if err := tx.QueryRowContext(ctx, `SELECT COALESCE(SUM(CAST(amount AS REAL)),0) FROM checkout_payments WHERE checkout_transaction_id=?`, transactionID).Scan(&paid); err != nil {
+		paidTotal, err := sumCheckoutAmounts(ctx, tx, `SELECT amount FROM checkout_payments WHERE checkout_transaction_id=?`, transactionID)
+		if err != nil {
 			return err
 		}
+		paid = normalizeRat(paidTotal)
 		totalRat, totalErr := parseCheckoutAmount(total)
 		paidRat, paidErr := parseCheckoutAmount(paid)
 		if totalErr != nil || paidErr != nil || totalRat.Cmp(paidRat) != 0 {
 			return fmt.Errorf("%w: payments must equal total amount", ErrCheckoutInvalid)
 		}
+		if err := postCheckoutInventory(ctx, tx, transactionID, now); err != nil {
+			return err
+		}
 		completedAt := now
-		_, err := tx.ExecContext(ctx, `UPDATE checkout_transactions SET status='completed', completed_at=?, updated_at=? WHERE id=?`, completedAt, now, transactionID)
+		_, err = tx.ExecContext(ctx, `UPDATE checkout_transactions SET status='completed', completed_at=?, updated_at=? WHERE id=?`, completedAt, now, transactionID)
 		return err
 	})
 	if err != nil {
@@ -459,6 +462,37 @@ func (s *CheckoutService) CreatePromotionRule(ctx context.Context, input CreateC
 }
 
 func (s *CheckoutService) ResolveScanCode(ctx context.Context, code string) (*CheckoutScanResolution, error) {
+	code = strings.TrimSpace(code)
+	if code == "" {
+		return nil, ErrCheckoutInvalid
+	}
+	// Resolve the documented precedence without creating absent optional databases.
+	inventory := NewInventoryService(filepath.Dir(s.databasePath))
+	if _, err := os.Stat(inventory.path); err == nil {
+		item, lookupErr := inventory.Scan(ctx, code)
+		if lookupErr == nil {
+			return &CheckoutScanResolution{Type: "item", Item: &item}, nil
+		}
+		if !errors.Is(lookupErr, ErrInventoryNotFound) {
+			return nil, lookupErr
+		}
+	} else if !errors.Is(err, os.ErrNotExist) {
+		return nil, err
+	}
+	if s.crm != nil {
+		if _, err := os.Stat(s.crm.databasePath); err == nil {
+			member, lookupErr := s.crm.ResolveMemberNumber(ctx, code)
+			if lookupErr == nil {
+				return &CheckoutScanResolution{Type: "membership", Membership: member}, nil
+			}
+			if !errors.Is(lookupErr, ErrCRMNotFound) {
+				return nil, lookupErr
+			}
+		} else if !errors.Is(err, os.ErrNotExist) {
+			return nil, err
+		}
+	}
+
 	db, err := s.open()
 	if err != nil {
 		return nil, err
@@ -509,21 +543,15 @@ func (s *CheckoutService) withMutableTransaction(ctx context.Context, transactio
 }
 
 func recalculateCheckoutTotals(ctx context.Context, tx *sql.Tx, transactionID, now string) error {
-	var subtotal, discount string
-	if err := tx.QueryRowContext(ctx, `SELECT COALESCE(SUM(CAST(line_amount AS REAL)),0) FROM checkout_transaction_lines WHERE checkout_transaction_id=?`, transactionID).Scan(&subtotal); err != nil {
-		return err
-	}
-	if err := tx.QueryRowContext(ctx, `SELECT COALESCE(SUM(CAST(amount AS REAL)),0) FROM checkout_discounts WHERE checkout_transaction_id=?`, transactionID).Scan(&discount); err != nil {
-		return err
-	}
-	subtotalRat, err := parseCheckoutAmount(subtotal)
+	subtotalRat, err := sumCheckoutAmounts(ctx, tx, `SELECT line_amount FROM checkout_transaction_lines WHERE checkout_transaction_id=?`, transactionID)
 	if err != nil {
 		return err
 	}
-	discountRat, err := parseCheckoutAmount(discount)
+	discountRat, err := sumCheckoutAmounts(ctx, tx, `SELECT amount FROM checkout_discounts WHERE checkout_transaction_id=?`, transactionID)
 	if err != nil {
 		return err
 	}
+
 	total := new(big.Rat).Sub(subtotalRat, discountRat)
 	if total.Sign() < 0 {
 		total.SetInt64(0)

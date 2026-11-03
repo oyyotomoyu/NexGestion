@@ -115,6 +115,15 @@ export default function AppLayout() {
                 </NexText>
               </NavLink>
             ) : null}
+            {hasPermission("orders.access") && hasPermission("orders.read") && <>
+              <NavLink to="/orders">{t("global.k_Orders_Orders")}</NavLink>
+              <NavLink to="/quotes">{t("global.k_Orders_Quotes")}</NavLink>
+            </>}
+            {hasPermission("inventory.access") && <>
+              <NavLink to="/inventory/stock">Inventory</NavLink>
+              <NavLink to="/inventory/inbound">Receive goods</NavLink>
+              <NavLink to="/inventory/outbound">Ship goods</NavLink>
+            </>}
             {hasPermission("templates.access") ? (
               <NavLink to="/templates" onClick={() => setMenuOpen(false)}>
                 <NexText as="span" variant="label" color="inherit">

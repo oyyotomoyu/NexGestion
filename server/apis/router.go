@@ -12,7 +12,7 @@ import (
 // API handlers belong in this package and may call the system package to
 // perform application operations. The router itself is only responsible for
 // directing requests to the correct handler.
-func InitRouter(router *http.ServeMux, users *system.UserService, attendance *system.AttendanceService, notifications *system.NotificationService, reports *system.ReportFileService, templates *system.TemplateService, salary *system.SalaryService, approvals *system.ApprovalService, checkout *system.CheckoutService, crm *system.CRMService, finance *system.FinanceService, security *system.SecurityService, hr *system.HRService, auth *system.AuthService, logService *applogs.Service) {
+func InitRouter(router *http.ServeMux, users *system.UserService, attendance *system.AttendanceService, notifications *system.NotificationService, reports *system.ReportFileService, templates *system.TemplateService, salary *system.SalaryService, approvals *system.ApprovalService, checkout *system.CheckoutService, crm *system.CRMService, finance *system.FinanceService, security *system.SecurityService, hr *system.HRService, auth *system.AuthService, logService *applogs.Service, inventoryServices ...*system.InventoryService) {
 	catalog, err := system.LoadPermissionCatalog()
 	if err != nil {
 		panic("load permission catalog: " + err.Error())
@@ -29,6 +29,9 @@ func InitRouter(router *http.ServeMux, users *system.UserService, attendance *sy
 			panic("API route uses undefined permission: " + permission)
 		}
 		return requireAuth(auth, withRequestLogger(logService, requirePermission(users, permission, handler)))
+	}
+	for _, inventory := range inventoryServices {
+		RegisterInventoryRoutes(router, inventory, protected)
 	}
 	authenticated := func(handler http.HandlerFunc) http.HandlerFunc {
 		return requireAuth(auth, withRequestLogger(logService, handler))

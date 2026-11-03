@@ -1,6 +1,7 @@
 package apis
 
 import (
+	"bytes"
 	"errors"
 	"net/http"
 	"strings"
@@ -124,12 +125,14 @@ func hideNotification(notifications *system.NotificationService) http.HandlerFun
 func exportNotificationsCSV(notifications *system.NotificationService) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		month := strings.TrimSpace(r.PathValue("month"))
-		w.Header().Set("Content-Type", "text/csv; charset=utf-8")
-		w.Header().Set("Content-Disposition", `attachment; filename="notifications-`+month+`.csv"`)
-		if err := notifications.ExportCSV(r.Context(), month, w); err != nil {
+		var data bytes.Buffer
+		if err := notifications.ExportCSV(r.Context(), month, &data); err != nil {
 			writeNotificationError(w, err)
 			return
 		}
+		w.Header().Set("Content-Type", "text/csv; charset=utf-8")
+		w.Header().Set("Content-Disposition", `attachment; filename="notifications-`+month+`.csv"`)
+		_, _ = w.Write(data.Bytes())
 	}
 }
 

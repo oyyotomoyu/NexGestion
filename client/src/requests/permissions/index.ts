@@ -15,7 +15,7 @@ const mockPermissions: Permission[] = [
   "approvals.access","approvals.templates.manage","approvals.read.self","approvals.decide","approvals.read","approvals.reassign",
   "checkout.access","crm.access","finance.access","general_affairs.access",
   "hr.access","hr.employment.read.self","hr.employment.read","hr.employment.manage","hr.tasks.manage","hr.performance.read.self","hr.performance.read","hr.performance.cycles.manage","hr.performance.review","hr.employee_relations.read.self","hr.employee_relations.manage","hr.employee_relations.read",
-  "inventory.access","operations.access","orders.access","procurement.access","production.access","scheduling.access",
+  "inventory.access","inventory.read","inventory.manage","operations.access","orders.access","orders.read","orders.manage","procurement.access","procurement.read","procurement.manage","production.access","production.read","production.manage","scheduling.access",
   "security.access","security.events.read","security.alerts.read","security.rules.manage","security.alerts.manage",
 ].map((key) => ({
   id: key,

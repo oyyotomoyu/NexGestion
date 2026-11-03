@@ -2,6 +2,8 @@
 
 ## 1. Purpose
 
+The standalone core backend and optional Inventory integration are implemented. See [Operations backend](../Development/operations-backend.md) for API contracts, workflow rules and remaining scope. The design notes below include future optional integrations.
+
 This document collects the design considerations for a future Procurement module, covering its four core functions: **vendors**, **purchase orders**, **goods receipt**, and **vendor billing**. It is a planning checklist, not an implementation spec, following the same convention as [`salary-system.md`](./salary-system.md).
 
 Procurement is one of four modules in the Operations System family — see [`operations-system.md`](./operations-system.md) for the shared Module Independence Principle and a cross-module overview. Procurement functions standalone: a business can track purchase orders with plain-text vendor names and no stock or finance linkage at all, and can adopt the vendor master, goods receipt, and billing pieces incrementally rather than all at once.

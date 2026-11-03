@@ -69,3 +69,13 @@ When the show time ends, the notification becomes expired and is no longer shown
 Administrators can export notification records by month as CSV, or use an admin API when available.
 
 Administrators can also open the notification message list to review all notification records, including active, edited, hidden, and expired messages.
+
+## Backend Connection
+
+Production builds use the authenticated notification API and store messages in `notification.db` under `DATABASE_DIR` (default `database/`). Notification expiration and retention cleanup run on server startup and hourly afterward.
+
+For development with real backend data, start the Go server and run `VITE_USE_BACKEND=true pnpm dev` in `client`. This enables real sign-in and real notification requests. Without that option, development retains its existing in-memory notification demo. Other modules may still use their development fixtures.
+
+Use **Send notification** to compose a message and add one or more audiences. For a group, role or user audience, enter the corresponding record ID. Own-group audiences are checked against actual group membership by the backend. Only permitted audience scopes and types appear in the form. Senders can edit active messages they can see in the inbox or administrator list.
+
+The inbox refreshes every 30 seconds while the page is visible and when you return to the tab. CSV downloads use the authenticated connection and require `notifications.export`.

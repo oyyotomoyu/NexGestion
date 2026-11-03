@@ -2,7 +2,7 @@
 
 ## 1. Purpose
 
-This document collects the design considerations for a future Inventory module, covering its four core functions: **warehouses**, **stock**, **outbound (shipping)**, and **inbound (receiving)**. It is a planning checklist, not an implementation spec, following the same convention as [`salary-system.md`](./salary-system.md).
+This document describes the Inventory module design, covering **warehouses**, **stock**, **outbound (shipping)**, and **inbound (receiving)**. The standalone core is implemented; the cross-module relationships below describe intended integrations. See [implementation status and API](../Development/inventory-implementation.md) for the current contract and limitations.
 
 Inventory is one of four modules in the Operations System family — see [`operations-system.md`](./operations-system.md) for the shared Module Independence Principle and a cross-module overview. Inventory has no required dependency on any other module: a single default warehouse plus manual inbound/outbound/adjustment records alone make it a usable standalone stock tracker.
 
