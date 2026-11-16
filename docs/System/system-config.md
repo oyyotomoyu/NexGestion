@@ -8,7 +8,7 @@ This document defines an administrative "System Config" feature that lets an aut
 2. `odm/` branding files (theme colors, images) described in [`ui-architecture.md`](../UiDesign/ui-architecture.md) Sections 12–13; and
 3. system/network settings (e.g. bind address, port) — not yet built, planned as a follow-up.
 
-This is a planning document, not a finalized schema or API contract.
+Business catalogs, branding colors/images and the permission reference view are implemented; see [Section 9](#9-implementation). Network settings (Section 5) and an editable product name (Section 4.3) are not built.
 
 ## 2. Editability Is Not Uniform
 
@@ -100,3 +100,34 @@ The following require separate product/engineering decisions before implementati
 - the full list of network/interface settings in scope, and the exact validate/apply/rollback flow (Section 5);
 - whether `permission.json` should ever become admin-editable (e.g. a future "custom permission" feature) or stay permanently code-owned; and
 - retention/safety rule for deleting a business-catalog entry still referenced by historical records (Section 3).
+
+## 9. Implementation
+
+Code: `server/system/system_config.go`, `server/apis/system_config.go`, `client/src/branding/BrandingProvider.tsx`, `client/src/views/Settings/SystemConfig`, `client/src/requests/systemConfig`. UI: **Settings → System → System config**, visible with `system_config.read`.
+
+### 9.1 Decisions on Section 8
+
+- **Catalog source of truth: database write-through.** Leave types live in `system.db` table `config_leave_types`. `config/leave-types.json` seeds the table once, when it is empty, and is otherwise only read by "restore defaults". Attendance's leave form (`GET /api/attendance/leave-types`) and leave validation read the table and offer only active entries.
+- **Deleting a referenced entry: retire instead.** An entry used by any leave request cannot be deleted (409). It can be *retired*: hidden from new applications, still valid on past requests. At least one leave type must stay active. Keys are immutable.
+- **Branding: runtime overrides (option a).** `odm/theme.json` and `odm/img/*` stay the build-time defaults baked into the client. Edits are stored server-side (colors in `system_settings` key `branding.theme_colors`, images in `config_branding_assets`) and served publicly, because the login page needs them before sign-in. The client layers them over its defaults at startup. Changes apply immediately for the editor and on the next page load for everyone else. No rebuild is needed.
+- **`permission.json` stays code-owned**, shown read-only, grouped by module.
+- Product name (Section 4.3), network settings (Section 5) and their `system_config.network.manage` key are not implemented; the key was not added to the catalog so it doesn't appear to grant anything.
+
+### 9.2 API
+
+| Route | Permission |
+| --- | --- |
+| `GET /api/branding` → `{ colors, images, updated_at }` (overrides only) | public |
+| `GET /api/branding/images/{name}` | public; served with `nosniff`, a sandboxing CSP and an ETag |
+| `GET /api/system-config/catalogs/leave-types` (with `retired`, `in_use`, `is_default`) | `system_config.read` |
+| `POST …/leave-types` `{ key, label }`, `PATCH …/leave-types/{key}` `{ label?, retired? }`, `DELETE …/leave-types/{key}`, `PUT …/leave-types/order` `{ keys }`, `POST …/leave-types/restore-defaults` | `system_config.catalogs.manage` |
+| `GET /api/system-config/permissions` | `system_config.read` |
+| `PUT /api/system-config/branding/colors` `{ colors: { token: "#rrggbb[aa]" } }`, `DELETE …/branding/colors` | `system_config.branding.manage` |
+| `PUT /api/system-config/branding/images/{name}` (raw file body, ≤ 256 KB), `DELETE …/branding/images/{name}` | `system_config.branding.manage` |
+| `GET /api/system-config/audit?surface=&limit=` | `system_config.read` |
+
+Every catalog list mutation returns the full updated list. "Restore defaults" gives each default entry its original label and position and reactivates it; entries an administrator added are kept after them.
+
+Colors accept only NexColor's 22 tokens. The UI stores only tokens that differ from the built-in theme, so a later change to an ODM default still reaches untouched tokens. Images must be named `login-logo.svg` (viewBox `0 0 240 56`), `language-icon.svg` (`0 0 24 24`) or `favicon.ico` (containing a 32×32 entry). SVGs are rejected if they contain scripts, `foreignObject`, event-handler attributes, DTD/entities, `javascript:`, `@import`, or references to anything other than in-document `#ids` or embedded PNG/JPEG data.
+
+Every change writes a `config_audit_events` row (actor, surface, action, detail, time), shown as "Recent changes" on the page.

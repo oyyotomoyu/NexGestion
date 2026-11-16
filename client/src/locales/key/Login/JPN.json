@@ -7,5 +7,14 @@
   "k_Main_Placeholder_Username": "アカウントを入力してください",
   "k_Main_Label_Password": "パスワード",
   "k_Main_Placeholder_Password": "パスワードを入力してください",
-  "k_Main_Button_Login": "ログイン"
+  "k_Main_Button_Login": "ログイン",
+  "k_Sso_Divider_Or": "または",
+  "k_Sso_Button_SignInWith": "{{name}} でサインイン",
+  "k_Sso_Status_Redirecting": "{{name}} に移動しています…",
+  "k_Sso_Error_SignInFailed": "このプロバイダーでサインインできませんでした。",
+  "k_Sso_Error_NotAllowed": "このアカウントはこの組織へのアクセスが許可されていません。",
+  "k_Sso_Error_Disabled": "この SSO 接続は現在無効になっています。",
+  "k_Sso_Error_Unavailable": "ID プロバイダーが利用できません。しばらくしてから再度お試しください。",
+  "k_Sso_Error_Pending": "このアカウントは管理者の承認待ちです。",
+  "k_Sso_Error_RateLimited": "サインインの試行回数が多すぎます。1 分ほど待ってから再度お試しください。"
 }

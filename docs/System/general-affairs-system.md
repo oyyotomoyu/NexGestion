@@ -2,7 +2,9 @@
 
 ## 1. Purpose
 
-This document collects the design considerations for a future General Affairs (總務) module: the internal-facing administrative work that keeps an office running — who has which piece of equipment, how someone requests office supplies, how a meeting room gets booked, and who is allowed to use the company seal on a contract. It is a planning checklist, not an implementation spec, following the same convention as [`salary-system.md`](./salary-system.md).
+The backend is implemented; see [Section 6](#6-implementation) for the finalized schema, API contract and the decisions taken on Section 5's open questions. There is no UI yet.
+
+This document collects the design considerations for the General Affairs (總務) module: the internal-facing administrative work that keeps an office running — who has which piece of equipment, how someone requests office supplies, how a meeting room gets booked, and who is allowed to use the company seal on a contract. It is a planning checklist, not an implementation spec, following the same convention as [`salary-system.md`](./salary-system.md).
 
 This document exists to close a specific gap. A prior review of the platform's coverage found that `hr-system.md` §2 explicitly deferred "Administrative & records management" (item 10) as out of scope, while `finance-system.md` §8 already assumed an "HR Asset Management" counterpart exists to pair with Finance's Fixed Asset Accounting — two documents referencing a system that was never actually designed. General Affairs is that system: Section 2.1 below is what `finance-system.md` §8 was assuming existed all along.
 
@@ -324,3 +326,78 @@ The initial Admin role automatically receives every General Affairs permission t
 - currency handling for `unit_amount` (Section 2.5.2) — assumed implicitly single-currency per poll, with no explicit `currency` field modeled;
 - whether `target_scope = group` (Section 2.5.1) is restricted to groups the creator manages, mirroring `notification-system.md`'s narrower `own_group` send scope, or open to any active group via `general_affairs.polls.create.group`;
 - permission keys beyond Section 4's first pass, to be finalized once API design starts.
+
+## 6. Implementation
+
+Code: `server/system/general_affairs*.go` (service, one file per area), `server/system/general_affairs_database.go` (schema of `general_affairs.db`), `server/apis/general_affairs.go` (routes). Permission keys are exactly Section 4's, in `config/permission.json`; `general_affairs.seals.manage` and `general_affairs.polls.settle` are marked high-risk. An hourly maintenance job runs alongside the other modules' jobs.
+
+All routes are under `/api/general-affairs`. Lists accept the platform's `page`, `page_size`, `keyword`, `sort`, `order` and return `{ items, pagination, ... }`.
+
+### 6.1 Approval routing (Section 3.1)
+
+Requisitions and seal usage requests look for an active Approval flow template with `request_type` `general_affairs.supply_requisition` / `general_affairs.seal_usage`.
+
+- **Template found**: the request is submitted to the Approval engine and `approval_request_id` is stored. The engine only notifies (approval-system.md §2.5), so General Affairs reads the engine's outcome whenever the record is read and copies `approved` / `rejected` / `cancelled` into its own `status`. Deciding through the General Affairs endpoint is refused (409).
+- **No template**: the requester's manager chain is resolved exactly as for leave (group-system.md §5, falling back to administrators) and stored in `ga_fallback_approvers`. Those users decide through `POST …/{id}/decide` (`{ "decision": "approve" | "reject", "comment" }`) and see pending items at `GET …/approvals`. For seals, holders of `general_affairs.seals.manage` may also decide. Nobody decides their own request.
+
+Bookings never require approval (Section 5's open question left as "self-service").
+
+### 6.2 Assets — Section 2.1
+
+| Route | Permission |
+| --- | --- |
+| `GET /assets` (filters `status`, `category`, `custodian_user_id`) | `assets.read` |
+| `GET /me/assets` | `assets.read.self` |
+| `GET /assets/{id}` (with full event history) | `assets.read`, or `assets.read.self` for an asset you hold |
+| `POST /assets`, `PATCH /assets/{id}` | `assets.manage` |
+| `POST /assets/{id}/events` | `assets.manage` |
+
+Event transitions: `issued` (in_stock → issued, needs `user_id`), `transferred` (issued → issued, new `user_id`), `repaired` (in_stock/issued → under_repair), `lost` (in_stock/issued → lost), `returned` (issued/under_repair/lost → in_stock, optional `location`), `retired` (in_stock/under_repair/lost → retired, terminal). A `created` event is recorded on creation. Events are append-only (enforced by triggers); the asset row's status/custodian/location is written in the same transaction. On `returned`, `repaired` and `lost` the event's `user_id` is the custodian who gave it up.
+
+### 6.3 Requisitions — Section 2.2
+
+`POST /requisitions` (`requisitions.submit`; `description`, optional `quantity` (3 dp), `estimated_amount` (2 dp, passed to the Approval engine as the amount)), `GET /me/requisitions` (`requisitions.read.self`), `GET /requisitions` (`requisitions.manage`), `GET /requisitions/approvals`, `GET /requisitions/{id}` (requester, its fallback approvers, or `requisitions.manage`), `POST /requisitions/{id}/decide`, `POST /requisitions/{id}/cancel` (requester, while pending or approved; also cancels the engine request), `POST /requisitions/{id}/fulfill` (`requisitions.manage`).
+
+Fulfilling an approved requisition with no body marks it `fulfilled`. With `procurement_purchase_order_id` or `inventory_outbound_id` (never both), the record must exist and not be cancelled. The requisition then stays `approved` and becomes `fulfilled` when the Purchase Order reaches `closed` or the Outbound reaches `shipped`, read from those modules' own databases. `fulfillment_link_status` shows the linked record's status, `missing`, or `module_not_installed`.
+
+### 6.4 Bookings — Section 2.3
+
+| Route | Permission |
+| --- | --- |
+| `GET /resources`; `POST /resources`, `PATCH /resources/{id}` | `bookings.read`; `bookings.manage` |
+| `GET /bookings` (filters `resource_id`, `status`, `booked_by_user_id`, `from`/`to` overlap window, `mine=true`, `invited=true`, `overdue=true`), `GET /bookings/{id}` | `bookings.read` |
+| `POST /bookings` | `bookings.book` |
+| `PATCH /bookings/{id}`, `POST /bookings/{id}/cancel`, `POST /bookings/{id}/return` | the booker with `bookings.book`, or `bookings.manage` for anyone's |
+| `POST /bookings/{id}/response` (`{ "response": "accepted" | "declined" }`) | `bookings.read`, invitees only |
+| `GET /coordination-cases?scope=mine|all&status=` | `bookings.book` (mine) / `bookings.coordinate` or `bookings.manage` (all) |
+| `POST /coordination-cases` (`{ requesting_booking_id, reason }`) | `bookings.coordinate` |
+| `POST /coordination-cases/{id}/decide` (`{ "decision": "accept" | "decline" }`) | `bookings.book`, the conflicting booking's booker only |
+| `POST /coordination-cases/{id}/cancel` | initiator, requesting booker, or `bookings.coordinate` / `bookings.manage` |
+
+Times are RFC3339, stored in UTC to the second. A booking lasts at most 31 days and must end in the future. Confirmed bookings of one resource never overlap on `[starts_at, ends_at)`; touching ranges are fine. This is enforced by triggers, so concurrent requests cannot both win. An overlapping request returns 409 naming the conflicting booking.
+
+Space Coordination: only `bookings.coordinate` holders raise cases (Section 5's open question), either at creation with `"coordinate": { "reason": … }` (optionally with `booked_by_user_id` to book for the requester) or later for a `pending_coordination` booking. A case covers exactly one conflicting booking. Accept swaps atomically: the conflicting booking is cancelled and the requesting one confirmed. Decline leaves the requesting booking `pending_coordination`; moving it to a free slot confirms it, and cancelling the conflicting booking confirms it automatically if the slot is then free. Notices are in-app only (no email; Section 5).
+
+The booker is never also an invitee. Overdue (`requires_return`, confirmed, past `ends_at`, not returned) is derived on read; the hourly job sends the booker one reminder. A return can be recorded only after the booking starts.
+
+### 6.5 Seals — Section 2.4
+
+`GET /seals` (`seals.request` or `seals.manage`), `POST /seals`, `PATCH /seals/{id}` (status may only be set to `lost` / `available`; `in_use` follows recorded use), `GET /seals/{id}/usage` (`seals.manage`), `POST /seal-requests` (`seals.request`; `seal_id`, `document_reference`, `requested_use_date` not in the past), `GET /me/seal-requests`, `GET /seal-requests` (`seals.manage`), `GET /seal-requests/approvals`, `GET /seal-requests/{id}`, `POST /seal-requests/{id}/decide`, `POST /seal-requests/{id}/cancel`, `POST /seal-requests/{id}/use` (`seals.manage`; optional `used_by_user_id`, default the requester, and `used_at`), `POST /seal-requests/{id}/return` (`seals.manage`).
+
+Using an approved request requires the seal to be `available`, sets it `in_use`, writes the usage log and marks the request `used`; recording the return stamps `returned_at` and frees the seal. The usage log is append-only except for that one stamp (enforced by triggers).
+
+### 6.6 Polls and meal orders — Sections 2.5–2.6
+
+`GET /polls?scope=respondable|mine|all` (`polls.respond` / a `polls.create.*` key / `polls.read` or `polls.settle`), `POST /polls` (`polls.create.organization` or `.group` matching `target_scope`), `GET /polls/{id}`, `PATCH /polls/{id}` and `DELETE /polls/{id}` (creator, draft only), `POST /polls/{id}/open` (creator; notifies the organization or the group), `POST /polls/{id}/close` (creator or `polls.settle`), `PUT /polls/{id}/response` (`polls.respond`), `POST /polls/{id}/settle` (`polls.settle`), `GET /salary-deductions` and `POST /salary-deductions/{id}/cancel` (`polls.settle`), `GET /me/salary-deductions` (`polls.respond`).
+
+- General polls are single-choice unless `allow_multiple` is set; food orders allow several options with quantities (up to 2 dp) and require `participating`. Each food-order option needs a `unit_amount`.
+- Respondents see a poll only when it is open or closed and targets the organization or a group they actively belong to. The creator and `polls.read` / `polls.settle` holders also get `results` (per-option counts, quantities and amounts, grand total) and every response.
+- An open poll past `closes_at` is treated as closed on read and persisted as closed by the hourly job. Responses cannot be edited after closing (Section 5).
+- Settlement is always an explicit `polls.settle` action, which also closes an open poll. A poll settles once. `none` records the settlement only. `salary_deduction` creates one `pending` Salary Deduction Request per participating response with a non-zero line total and notifies each person. `finance_expense` is refused (409) until Finance implements Expense claims (finance-system.md §6). Only `pending` deductions can be cancelled here; marking one `applied` is left to a future Salary settlement run.
+- Any active group can be targeted with `polls.create.group` (Section 5's open question). Amounts are single-currency.
+
+### 6.7 Not implemented
+
+- UI screens.
+- Finance expense settlement (blocked on Finance) and Salary consuming deduction requests.
+- Email notices, recurring bookings, attendee availability checks, and the other items Section 5 leaves out of scope.

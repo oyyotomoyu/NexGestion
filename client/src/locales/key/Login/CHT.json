@@ -7,5 +7,14 @@
   "k_Main_Placeholder_Username": "請輸入帳號",
   "k_Main_Label_Password": "密碼",
   "k_Main_Placeholder_Password": "請輸入密碼",
-  "k_Main_Button_Login": "登入"
+  "k_Main_Button_Login": "登入",
+  "k_Sso_Divider_Or": "或",
+  "k_Sso_Button_SignInWith": "使用 {{name}} 登入",
+  "k_Sso_Status_Redirecting": "正在前往 {{name}}…",
+  "k_Sso_Error_SignInFailed": "無法使用此身分提供者登入。",
+  "k_Sso_Error_NotAllowed": "您的帳號無權存取此組織。",
+  "k_Sso_Error_Disabled": "此 SSO 連線目前已停用。",
+  "k_Sso_Error_Unavailable": "身分提供者目前無法使用，請稍後再試。",
+  "k_Sso_Error_Pending": "您的帳號正在等待管理員核准。",
+  "k_Sso_Error_RateLimited": "登入嘗試次數過多，請稍候一分鐘再試。"
 }

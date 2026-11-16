@@ -1,0 +1,18 @@
+.orders-page { display: grid; gap: 20px; max-width: 1280px; width: 100%; margin: 0 auto; }
+.orders-header { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 16px; }
+.orders-toolbar, .orders-form { display: flex; flex-wrap: wrap; align-items: end; gap: 12px; }
+.orders-panel { display: grid; gap: 16px; min-width: 0; padding: 20px; border: 1px solid var(--color-border); border-radius: 12px; background: var(--color-surface); }
+.orders-link { display: inline-flex; padding: 10px 16px; color: var(--color-primary); border: 1px solid var(--color-border); border-radius: 8px; text-decoration: none; }
+.orders-link.active { background: var(--color-primary-soft); }
+.orders-field { display: grid; gap: 8px; min-width: 180px; max-width: 100%; }
+.orders-lines { display: grid; gap: 16px; margin: 0; padding: 12px; min-width: 0; border: 1px solid var(--color-border); border-radius: 8px; }
+.orders-line { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(180px, 100%), 1fr)); gap: 12px; align-items: end; padding: 12px 0; border-bottom: 1px solid var(--color-border); }
+.orders-table { overflow-x: auto; }
+.orders-table table { width: 100%; border-collapse: collapse; text-align: left; }
+.orders-table td, .orders-table th { padding: 12px; border-bottom: 1px solid var(--color-border); }
+.orders-table a { color: var(--color-primary); }
+.orders-event { display: flex; flex-wrap: wrap; gap: 16px; justify-content: space-between; padding: 12px 0; border-bottom: 1px solid var(--color-border); }
+.orders-reference { overflow-wrap: anywhere; font-size: 0.85em; color: var(--color-muted); }
+.orders-stock-label { font-size: 0.85em; color: var(--color-muted); }
+.orders-shipment { padding: 12px 0; border-bottom: 1px solid var(--color-border); }
+@media (max-width: 600px) { .orders-form { display: grid; grid-template-columns: 1fr; } .orders-panel { padding: 14px; } }

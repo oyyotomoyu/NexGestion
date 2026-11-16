@@ -29,12 +29,12 @@ type DatabaseSpec struct {
 var RequiredDatabases = []DatabaseSpec{
 	{
 		Name: "system.db",
-		Schema: []string{
+		Schema: append([]string{
 			`CREATE TABLE IF NOT EXISTS system_settings (
 				key TEXT PRIMARY KEY,
 				value TEXT NOT NULL
 			)`,
-		},
+		}, systemConfigSchema...),
 		Seed: []string{
 			`INSERT INTO system_settings (key, value) VALUES ('language', 'CHT')`,
 		},
@@ -52,6 +52,9 @@ var RequiredDatabases = []DatabaseSpec{
 	securityDatabaseSpec(),
 	hrDatabaseSpec(),
 	inventoryDatabaseSpec(),
+	schedulingDatabaseSpec(),
+	ssoDatabaseSpec(),
+	generalAffairsDatabaseSpec(),
 	operationsDatabaseSpec("order.db"),
 	operationsDatabaseSpec("procurement.db"),
 	operationsDatabaseSpec("production.db"),
@@ -70,7 +73,7 @@ func syncSystemSettingsDefaults(ctx context.Context, tx *sql.Tx) error {
 			return fmt.Errorf("seed default setting %q: %w", key, err)
 		}
 	}
-	return nil
+	return seedLeaveTypeCatalog(ctx, tx)
 }
 
 // EnsureRequiredDatabases creates and initializes every required database.

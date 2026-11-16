@@ -39,7 +39,7 @@ interface NexColorProps {
 
 type NexColorVariables = CSSProperties & Record<`--color-${string}`, string>;
 
-const defaultTheme = defaultThemeJson satisfies NexColorTheme;
+export const defaultTheme = defaultThemeJson satisfies NexColorTheme;
 const NexColorContext = createContext<NexColorTheme>(defaultTheme);
 
 function toCssVariableName(token: string) {

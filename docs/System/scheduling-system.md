@@ -2,7 +2,7 @@
 
 ## 1. Purpose
 
-This document collects the design considerations for a future Scheduling module. It is a planning checklist, not a finalized implementation spec. No data model, API, or permission keys are finalized here; those must be confirmed in a follow-up design pass once scope is approved.
+This document collects the design considerations for the Scheduling module. Sections 1–13 are the planning checklist. A first backend version is implemented; its finalized decisions, schema, and API contract are recorded in [Section 14](#14-v1-implementation), which takes precedence where it is more specific.
 
 The Scheduling System lets an organization plan who should work, when they should work, and which group the work belongs to. Scheduling is centered on **groups**: a schedule is created for a department, branch, store, project team, or other group, then assigned to users who belong to or are eligible for that group.
 
@@ -313,3 +313,115 @@ The following require separate product/engineering decisions before implementati
 - policy-pack design for jurisdiction-specific scheduling/labor rules;
 - how Salary consumes planned hours or variance records when integration is enabled; and
 - retention rules for historical schedules and audit events.
+
+## 14. V1 Implementation
+
+This section records the decisions made for the first backend version. Items listed under Section 14.8 remain open.
+
+### 14.1 Decisions
+
+| Topic | Decision |
+| --- | --- |
+| Storage | Dedicated `scheduling.db` |
+| Group modes | `required` and `advisory`; default `advisory`. `standalone` scheduling groups are deferred, so every period references a Group System group |
+| Group snapshot | `group_name` and `group_type` are stored on the period at creation and refreshed at publication |
+| Open slots | Open capacity is computed as `required_headcount` minus active named assignments; no null-user assignment rows are stored |
+| Assignment source | Only `manual` is produced in v1 |
+| Visibility | `scheduling.read` sees every period, drafts included. Group-scoped visibility is deferred |
+| Approval | Publication does not require approval in v1 |
+
+### 14.2 Schema
+
+Tables in `scheduling.db` follow Sections 4.1–4.3, plus these deviations:
+
+- `schedule_periods` adds `group_name` and `group_type` snapshot columns and has no `scheduling_group_id`.
+- `schedule_assignments.user_id` is required. A partial unique index prevents the same user from holding two active (`planned`/`confirmed`) assignments on one shift.
+- `scheduling_settings` is a key/value table for the configuration in Section 14.3.
+- `scheduling_events` is the audit and change log: `period_created`, `period_updated`, `published`, `locked`, `archived`, `cancelled`, `shift_created`, `shift_updated`, `shift_cancelled`, `assignment_created`, `assignment_cancelled`, `assignment_confirmed`, `assignment_declined`, `override`, `config_updated`.
+
+Local shift times use `YYYY-MM-DDTHH:MM` in the period timezone; UTC instants use RFC 3339. A shift may last at most 24 hours and must start on a date inside the period. A period may span at most 366 days.
+
+### 14.3 Configuration
+
+| Key | Default | Meaning |
+| --- | --- | --- |
+| `group_mode` | `advisory` | `required` blocks non-members and inactive groups; `advisory` warns |
+| `allow_open_shifts` | `true` | When `false`, an understaffed `named_users` shift blocks publication |
+| `max_weekly_minutes` | `0` (off) | Warn when a user's planned minutes in a local Monday–Sunday week exceed this |
+| `min_rest_minutes` | `0` (off) | Warn when the gap between two of a user's shifts is shorter than this |
+
+### 14.4 Conflict Codes
+
+| Code | Severity | Raised when |
+| --- | --- | --- |
+| `user_overlap` | error | The user holds another active assignment whose interval overlaps, in any non-cancelled schedule |
+| `user_inactive` | error | The assigned user is not active |
+| `user_missing` | error | The assigned user no longer exists |
+| `not_group_member` | error in `required`, warning in `advisory` | The user is not an active member of the period's group |
+| `group_inactive` | error | `required` mode and the group is inactive |
+| `group_missing` | error in `required`, warning in `advisory` | The group no longer exists |
+| `understaffed` | error if `allow_open_shifts = false`, else warning | A `named_users` shift has open slots |
+| `open_slots` | warning | An `open_shift` shift has open slots |
+| `rest_time` | warning | Rest between shifts is below `min_rest_minutes` |
+| `max_weekly_hours` | warning | Weekly planned minutes exceed `max_weekly_minutes` |
+
+`requirement_only` shifts are never reported as understaffed.
+
+Errors block assignment, shift time changes, and publication. A caller holding `scheduling.override` may proceed by sending a non-empty override reason; the reason is stored on the assignment (where applicable) and an `override` event records the bypassed conflicts. Sending an override reason without that permission returns `403`. Once an assignment has been accepted with an override, its errors — and overlaps against it — are reported as warnings at publication.
+
+### 14.5 Lifecycle Rules
+
+- Periods and their shifts and assignments are editable only in `draft` or `published`. Timezone and dates change only in `draft`; timezone cannot change once shifts exist, and dates cannot exclude existing shifts.
+- Publishing moves `draft` shifts to `published`. Shifts added to a published period are created as `published`.
+- Cancelling a shift cancels its active assignments.
+- Assigned users may confirm or decline only while both the period and shift are `published`.
+
+### 14.6 Permissions
+
+Implemented keys: `scheduling.access`, `scheduling.read.self`, `scheduling.read`, `scheduling.manage`, `scheduling.publish`, `scheduling.override` (high risk, password-confirmed when granted), and `scheduling.config.manage`. `scheduling.approve` and `scheduling.reports.read` will be added with their features.
+
+### 14.7 API
+
+All routes require authentication. Error bodies use `{ "code", "error" }`; validation failures return `409` with `code = scheduling_conflicts` and a `conflicts` array.
+
+| Method | Path | Permission | Description |
+| --- | --- | --- | --- |
+| `GET` | `/api/scheduling/config` | `scheduling.read` | Read configuration |
+| `PATCH` | `/api/scheduling/config` | `scheduling.config.manage` | Update configuration |
+| `GET` | `/api/scheduling/groups` | `scheduling.manage` | List Group System groups to schedule (same query options as `/api/groups`) |
+| `GET` | `/api/scheduling/periods` | `scheduling.read` | List periods |
+| `POST` | `/api/scheduling/periods` | `scheduling.manage` | Create a draft period |
+| `GET` | `/api/scheduling/periods/{id}` | `scheduling.read` | Period with shifts and assignments |
+| `PATCH` | `/api/scheduling/periods/{id}` | `scheduling.manage` | Update name, timezone, or dates |
+| `POST` | `/api/scheduling/periods/{id}/publish` | `scheduling.publish` | Publish; optional `{ "reason" }` acts as override reason |
+| `POST` | `/api/scheduling/periods/{id}/lock` | `scheduling.publish` | Lock a published period |
+| `POST` | `/api/scheduling/periods/{id}/archive` | `scheduling.publish` | Archive a locked period |
+| `POST` | `/api/scheduling/periods/{id}/cancel` | `scheduling.publish` | Cancel a draft or published period; optional `{ "reason" }` |
+| `GET` | `/api/scheduling/periods/{id}/conflicts` | `scheduling.read` | Preview validation results |
+| `GET` | `/api/scheduling/periods/{id}/events` | `scheduling.read` | Audit and change history |
+| `POST` | `/api/scheduling/periods/{id}/shifts` | `scheduling.manage` | Create a shift |
+| `PATCH` | `/api/scheduling/shifts/{id}` | `scheduling.manage` | Update a shift; optional `override_reason` |
+| `POST` | `/api/scheduling/shifts/{id}/cancel` | `scheduling.manage` | Cancel a shift and its assignments |
+| `GET` | `/api/scheduling/shifts/{id}/candidates` | `scheduling.manage` | Active group members with conflict preview |
+| `POST` | `/api/scheduling/shifts/{id}/assignments` | `scheduling.manage` | Assign `{ "user_id", "override_reason"? }` |
+| `DELETE` | `/api/scheduling/assignments/{id}` | `scheduling.manage` | Cancel an assignment |
+| `GET` | `/api/scheduling/me/shifts?from=&to=` | `scheduling.read.self` | Own shifts in published, locked, or archived periods; range at most 93 days |
+| `PATCH` | `/api/scheduling/me/assignments/{id}` | `scheduling.read.self` | `{ "assignment_status": "confirmed" \| "declined", "note"? }` |
+
+Period detail resolves each assignment's `display_name` from UserSystem at read time; names are not stored.
+
+Mutation responses that can carry warnings wrap the record, for example `{ "assignment": {...}, "warnings": [...] }` or `{ "period": {...}, "warnings": [...] }`.
+
+Period list query definition:
+
+| Option | Definition |
+| --- | --- |
+| Response array | `periods` |
+| Keyword fields | `name`, `group_name` |
+| Sort fields | `name`, `group_name`, `start_date`, `end_date`, `status`, `created_at`, `updated_at` |
+| Default sort | `start_date desc`, then `id asc` |
+| Extra filters | `group_id`, `status`, `date` (periods containing that date) |
+
+### 14.8 Still Deferred
+
+Templates and recurrence (Section 6), reports (Section 11), publication approval, notifications on publish or change, shift swaps and open-shift claiming, auto-scheduling, jurisdiction policy packs, Attendance variance and Salary integration (Sections 5.3–5.4), `standalone` group mode, group-scoped visibility, and retention rules.

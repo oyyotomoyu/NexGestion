@@ -12,7 +12,7 @@ import (
 // API handlers belong in this package and may call the system package to
 // perform application operations. The router itself is only responsible for
 // directing requests to the correct handler.
-func InitRouter(router *http.ServeMux, users *system.UserService, attendance *system.AttendanceService, notifications *system.NotificationService, reports *system.ReportFileService, templates *system.TemplateService, salary *system.SalaryService, approvals *system.ApprovalService, checkout *system.CheckoutService, crm *system.CRMService, finance *system.FinanceService, security *system.SecurityService, hr *system.HRService, auth *system.AuthService, logService *applogs.Service, inventoryServices ...*system.InventoryService) {
+func InitRouter(router *http.ServeMux, users *system.UserService, attendance *system.AttendanceService, notifications *system.NotificationService, reports *system.ReportFileService, templates *system.TemplateService, salary *system.SalaryService, approvals *system.ApprovalService, checkout *system.CheckoutService, crm *system.CRMService, finance *system.FinanceService, security *system.SecurityService, hr *system.HRService, scheduling *system.SchedulingService, sso *system.SSOService, generalAffairs *system.GeneralAffairsService, systemConfig *system.SystemConfigService, auth *system.AuthService, logService *applogs.Service, inventoryServices ...*system.InventoryService) {
 	catalog, err := system.LoadPermissionCatalog()
 	if err != nil {
 		panic("load permission catalog: " + err.Error())
@@ -33,9 +33,13 @@ func InitRouter(router *http.ServeMux, users *system.UserService, attendance *sy
 	for _, inventory := range inventoryServices {
 		RegisterInventoryRoutes(router, inventory, protected)
 	}
+	RegisterSchedulingRoutes(router, scheduling, users, protected)
+	RegisterSSORoutes(router, sso, users, security, logService, protected)
+	RegisterSystemConfigRoutes(router, systemConfig, protected)
 	authenticated := func(handler http.HandlerFunc) http.HandlerFunc {
 		return requireAuth(auth, withRequestLogger(logService, handler))
 	}
+	RegisterGeneralAffairsRoutes(router, generalAffairs, users, protected, authenticated)
 	router.HandleFunc("GET /api/auth/me", protected("users.read", me(users)))
 	router.HandleFunc("POST /api/auth/logout", protected("users.read", logout(auth)))
 	router.HandleFunc("GET /api/users", protected("users.read", listUsers(users)))
@@ -68,7 +72,7 @@ func InitRouter(router *http.ServeMux, users *system.UserService, attendance *sy
 	router.HandleFunc("POST /api/attendance/today/sign-in", protected("attendance.clock.self", attendanceSignIn(attendance)))
 	router.HandleFunc("POST /api/attendance/today/sign-out", protected("attendance.clock.self", attendanceSignOut(attendance)))
 	router.HandleFunc("GET /api/attendance/days", protected("attendance.read.self", attendanceDays(attendance, true)))
-	router.HandleFunc("GET /api/attendance/leave-types", protected("attendance.read.self", attendanceLeaveTypes()))
+	router.HandleFunc("GET /api/attendance/leave-types", protected("attendance.read.self", attendanceLeaveTypes(attendance)))
 	router.HandleFunc("GET /api/attendance/leave-requests", protected("attendance.read.self", attendanceLeaveRequests(attendance)))
 	router.HandleFunc("POST /api/attendance/leave-requests", protected("attendance.clock.self", applyAttendanceLeave(attendance)))
 	router.HandleFunc("GET /api/attendance/leave-approvals", authenticated(attendanceLeaveApprovals(attendance)))

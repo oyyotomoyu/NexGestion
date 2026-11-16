@@ -8,8 +8,7 @@
     "build": "pnpm check:css-colors && tsc --noEmit && vite build",
     "check:css-colors": "node scripts/check-css-colors.mjs",
     "preview": "vite preview",
-    "typecheck": "tsc --noEmit",
-    "test:orders": "node --test scripts/test-order-decimals.mjs"
+    "typecheck": "tsc --noEmit"
   },
   "dependencies": {
     "i18next": "^26.3.3",

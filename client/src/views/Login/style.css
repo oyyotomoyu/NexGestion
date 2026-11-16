@@ -70,6 +70,26 @@
   color: var(--color-error);
 }
 
+.login-sso {
+  display: grid;
+  gap: 12px;
+  margin-top: 20px;
+}
+
+.login-sso__divider {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.login-sso__divider::before,
+.login-sso__divider::after {
+  flex: 1;
+  height: 1px;
+  background: var(--color-border);
+  content: "";
+}
+
 @media (max-width: 520px) {
   .login-page {
     padding: 80px 20px 24px;

@@ -7,5 +7,14 @@
   "k_Main_Placeholder_Username": "Enter your account",
   "k_Main_Label_Password": "Password",
   "k_Main_Placeholder_Password": "Enter your password",
-  "k_Main_Button_Login": "Login"
+  "k_Main_Button_Login": "Login",
+  "k_Sso_Divider_Or": "or",
+  "k_Sso_Button_SignInWith": "Sign in with {{name}}",
+  "k_Sso_Status_Redirecting": "Redirecting to {{name}}…",
+  "k_Sso_Error_SignInFailed": "Unable to sign in with this provider.",
+  "k_Sso_Error_NotAllowed": "Your account is not allowed to access this organization.",
+  "k_Sso_Error_Disabled": "This SSO connection is currently disabled.",
+  "k_Sso_Error_Unavailable": "The identity provider is unavailable. Please try again later.",
+  "k_Sso_Error_Pending": "Your account is awaiting administrator approval.",
+  "k_Sso_Error_RateLimited": "Too many sign-in attempts. Please wait a minute and try again."
 }

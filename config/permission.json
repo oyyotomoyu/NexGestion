@@ -544,6 +544,39 @@
       "description": "Access the Scheduling System"
     },
     {
+      "key": "scheduling.read.self",
+      "module": "scheduling",
+      "description": "View, confirm, and decline the current user's published shifts"
+    },
+    {
+      "key": "scheduling.read",
+      "module": "scheduling",
+      "description": "View schedule periods, shifts, assignments, and conflicts"
+    },
+    {
+      "key": "scheduling.manage",
+      "module": "scheduling",
+      "description": "Create and edit schedule periods, shifts, and assignments"
+    },
+    {
+      "key": "scheduling.publish",
+      "module": "scheduling",
+      "description": "Publish, lock, archive, and cancel schedule periods"
+    },
+    {
+      "key": "scheduling.override",
+      "module": "scheduling",
+      "description": "Bypass scheduling validation with an audited reason",
+      "high_risk": true,
+      "high_risk_reason": "Can assign users to overlapping shifts or outside their group and publish understaffed schedules",
+      "requires_password": true
+    },
+    {
+      "key": "scheduling.config.manage",
+      "module": "scheduling",
+      "description": "Configure scheduling group mode and validation policy"
+    },
+    {
       "key": "security.access",
       "module": "security",
       "description": "Access the Security module"
@@ -573,6 +606,125 @@
       "high_risk": true,
       "high_risk_reason": "Can redirect or suppress who is notified of a security incident",
       "requires_password": true
+    },
+    {
+      "key": "sso.read",
+      "module": "sso",
+      "description": "View SSO connections, linked external identities and SSO audit events"
+    },
+    {
+      "key": "sso.manage",
+      "module": "sso",
+      "description": "Create, change, test, export and delete SSO connections and link or unlink external identities",
+      "high_risk": true,
+      "high_risk_reason": "Controls which external identity providers can sign users in and which accounts they map to",
+      "requires_password": true
+    },
+    {
+      "key": "general_affairs.assets.read.self",
+      "module": "general_affairs",
+      "description": "View assets currently issued to you"
+    },
+    {
+      "key": "general_affairs.assets.read",
+      "module": "general_affairs",
+      "description": "View all assets and their custody history"
+    },
+    {
+      "key": "general_affairs.assets.manage",
+      "module": "general_affairs",
+      "description": "Create assets and record issuance, transfer, return, repair, loss and retirement"
+    },
+    {
+      "key": "general_affairs.requisitions.submit",
+      "module": "general_affairs",
+      "description": "Submit and cancel your own office supply requisitions"
+    },
+    {
+      "key": "general_affairs.requisitions.read.self",
+      "module": "general_affairs",
+      "description": "View the status of your own office supply requisitions"
+    },
+    {
+      "key": "general_affairs.requisitions.manage",
+      "module": "general_affairs",
+      "description": "View all office supply requisitions and mark them fulfilled"
+    },
+    {
+      "key": "general_affairs.bookings.read",
+      "module": "general_affairs",
+      "description": "View bookable resources, availability and bookings"
+    },
+    {
+      "key": "general_affairs.bookings.book",
+      "module": "general_affairs",
+      "description": "Book resources for yourself, invite attendees, edit, cancel and return your own bookings, and answer coordination requests on them"
+    },
+    {
+      "key": "general_affairs.bookings.manage",
+      "module": "general_affairs",
+      "description": "Manage bookable resources and edit, cancel or record the return of any booking"
+    },
+    {
+      "key": "general_affairs.bookings.coordinate",
+      "module": "general_affairs",
+      "description": "Raise Space Coordination cases for conflicting bookings and book on behalf of others"
+    },
+    {
+      "key": "general_affairs.seals.request",
+      "module": "general_affairs",
+      "description": "Request use of a company seal"
+    },
+    {
+      "key": "general_affairs.seals.manage",
+      "module": "general_affairs",
+      "description": "Manage seals, decide seal usage requests, and record actual seal use and return",
+      "high_risk": true,
+      "high_risk_reason": "A seal legally binds the organization; this permission controls who may authorize and record its use",
+      "requires_password": true
+    },
+    {
+      "key": "general_affairs.polls.create.organization",
+      "module": "general_affairs",
+      "description": "Create polls for the whole organization"
+    },
+    {
+      "key": "general_affairs.polls.create.group",
+      "module": "general_affairs",
+      "description": "Create polls for a specific group"
+    },
+    {
+      "key": "general_affairs.polls.respond",
+      "module": "general_affairs",
+      "description": "Respond to polls you are invited to and view your own meal-order deductions"
+    },
+    {
+      "key": "general_affairs.polls.read",
+      "module": "general_affairs",
+      "description": "View every poll's aggregate results and individual responses"
+    },
+    {
+      "key": "general_affairs.polls.settle",
+      "module": "general_affairs",
+      "description": "Close and settle food-order polls, creating salary deduction requests",
+      "high_risk": true,
+      "high_risk_reason": "Settlement creates per-person salary deduction requests",
+      "requires_password": true
+    },
+    {
+      "key": "system_config.read",
+      "module": "system_config",
+      "description": "View business catalogs, branding overrides, the permission catalog and the configuration change history"
+    },
+    {
+      "key": "system_config.catalogs.manage",
+      "module": "system_config",
+      "description": "Add, rename, reorder, retire and delete business catalog entries such as leave types"
+    },
+    {
+      "key": "system_config.branding.manage",
+      "module": "system_config",
+      "description": "Change the theme colors and replace the logo, language icon and favicon"
     },
     {
       "key": "inventory.read",

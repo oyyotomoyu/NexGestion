@@ -45,6 +45,14 @@ export default function Settings() {
               <NexText as="span" color="inherit">{t("global.k_Settings_Groups_Title")}</NexText>
             </NavLink>
           ) : null}
+          {hasPermission("system_config.read") ? (
+            <>
+              <NexText variant="label">{t("global.k_Settings_System_Title")}</NexText>
+              <NavLink to="system-config">
+                <NexText as="span" color="inherit">{t("global.k_Settings_SystemConfig_Title")}</NexText>
+              </NavLink>
+            </>
+          ) : null}
           {hasPermission("security.access") ? (
             <>
               <NexText variant="label">{t("global.k_Settings_Security_Title")}</NexText>

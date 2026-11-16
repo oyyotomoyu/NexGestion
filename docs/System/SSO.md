@@ -1,7 +1,12 @@
 # NexGestion SSO Specification
 
-This document defines the product and engineering rules for adding Single Sign-On
-(SSO) login to NexGestion in the future.
+This document defines the product and engineering rules for Single Sign-On (SSO)
+login in NexGestion.
+
+The Phase 1 (OIDC) MVP backend and the login-page SSO buttons are implemented.
+See [Implementation](#implementation) at the end of this document for the
+finalized schema, API contract and the decisions taken where this specification
+left room. SAML and the administrator UI are not built yet.
 
 NexGestion is a local-first, self-hosted business management platform. SSO should
 therefore be implemented as an optional integration with external identity
@@ -385,3 +390,111 @@ Minimum acceptable SSO release:
   and disabled-provider behavior.
 - Document provider setup examples only after the internal API and data model are
   stable.
+
+## Implementation
+
+Code: `server/system/sso.go` (connections, linking, provisioning, audit),
+`server/system/sso_oidc.go` (discovery, JWKS, code exchange, ID token
+validation), `server/system/sso_database.go` (schema), `server/apis/sso.go`
+(routes, rate limiting), `AuthService.IssueSSOSession` in
+`server/system/auth.go`, and the SSO section of `client/src/views/Login`.
+
+### Organizations
+
+NexGestion is single-tenant today. `sso.db` has an `organizations` table seeded
+with one row, `id = "default"`, and every connection and identity carries
+`organization_id`. A connection of an `inactive` organization cannot start or
+complete a login. Users themselves are not yet organization-scoped.
+
+### Database (`sso.db`)
+
+| Table | Purpose |
+| --- | --- |
+| `organizations` | Tenant records (see above) |
+| `sso_connections` | Fields from "SSO Connections" plus `name`, `token_endpoint_auth_method` (`client_secret_basic` default, `client_secret_post`, `none` for public clients), `allowed_email_domains`, `jit_enabled`, `jit_require_approval`, `jit_default_role_id`, `jit_default_group_id`, `group_sync_enabled`, `group_mapping`, and the last test result |
+| `sso_user_identities` | Fields from "User Identities"; unique on (`sso_connection_id`, `provider_subject`) and on (`sso_connection_id`, `user_id`) — one identity per user per connection. Deleting a connection deletes its identities |
+| `sso_login_states` | One row per started login: SHA-256 of `state`, PKCE verifier, nonce, `return_to`, 10-minute expiry. Consumed (deleted) on the first callback, success or failure |
+| `sso_audit_events` | Every event in "Audit Events" with the fields listed there |
+
+The just-in-time provisioning settings and allowed domains are per connection
+rather than per organization, because with a single organization each identity
+provider normally maps to its own email domains.
+
+### Client secret encryption
+
+AES-256-GCM, with the connection id as associated data. The 32-byte key is read
+from `NEXGESTION_SSO_SECRET_KEY` (base64) when set; otherwise it is generated
+on first use into `<DATABASE_DIR>/sso_secret.key` (mode 0600, git-ignored).
+Losing or changing the key makes stored secrets undecryptable; the connection
+test reports this, and the administrator re-enters the secret.
+
+### HTTPS
+
+Issuer, endpoints and redirect URI must be `https`, except for `localhost` or
+loopback addresses. A deployment whose identity provider is on its own private
+network over plain HTTP opts in with `NEXGESTION_SSO_ALLOW_HTTP=true`.
+
+### API
+
+Public (rate limited to 20 requests per minute per IP for each of start and
+callback):
+
+| Endpoint | Behavior |
+| --- | --- |
+| `GET /api/auth/sso/connections` | `{ items: [{ id, name, provider_type }] }`, enabled connections only |
+| `POST /api/auth/sso/{connectionId}/start` | Optional body `{ "return_to": "/orders" }`. Returns `{ authorization_url }`. `return_to` must be a same-origin path; anything else becomes `/dashboard` |
+| `GET /api/auth/sso/{connectionId}/callback` | On success sets the normal refresh cookie and redirects (303) to `return_to`; the SPA restores the session through `POST /api/auth/refresh` exactly as on page reload. On failure redirects to `/login?sso_error=<code>` |
+
+Failure codes: `invalid_request`, `connection_disabled`, `provider_error`,
+`provider_unavailable`, `account_not_allowed`, `account_pending`,
+`rate_limited`. The browser only ever sees the code; the reason goes to the
+audit trail without tokens, codes, secrets or claim payloads.
+
+Administrator (`sso.read` for GET, `sso.manage` for the rest):
+
+| Endpoint | Behavior |
+| --- | --- |
+| `GET /api/admin/sso/connections`, `GET …/connections/{id}` | Connection(s); the secret is shown only as `client_secret_configured` |
+| `POST /api/admin/sso/connections` | Requires `name`, `issuer`, `client_id`, `redirect_uri`, and `client_secret` unless `token_endpoint_auth_method` is `none`. Missing endpoints are filled from `.well-known/openid-configuration` (the document's issuer must match exactly). `redirect_uri` must have the path `/api/auth/sso/{id}/callback`; the literal `{id}` is replaced with the new id. New connections are disabled unless `is_enabled: true` is sent |
+| `PATCH /api/admin/sso/connections/{id}` | Partial update. Changing `issuer` re-runs discovery for endpoints not sent in the same request |
+| `DELETE /api/admin/sso/connections/{id}` | Also removes its linked identities |
+| `POST /api/admin/sso/connections/{id}/test` | Checks discovery, endpoint consistency, PKCE S256 support, JWKS, secret decryption and redirect URI; stores the result on the connection |
+| `GET /api/admin/sso/identities?user_id=&connection_id=` | Linked identities |
+| `POST /api/admin/sso/identities` | Administrator pre-provisioning: `{ user_id, sso_connection_id, provider_subject, provider_email? }` |
+| `DELETE /api/admin/sso/identities/{id}` | Disconnects an external identity |
+| `GET /api/admin/sso/audit-events?event_type=&connection_id=&user_id=&limit=` | Newest first, at most 200 — e.g. `event_type=sso.login.failed` for recent failures |
+| `GET /api/admin/sso/export` / `POST /api/admin/sso/import` | Export without secrets. Import keeps each connection's id (so redirect URIs registered at the providers stay valid), skips ids that already exist, and creates connections disabled and without secret |
+
+Login failures and successes are also recorded as SIEM security events
+(`login_failed` / `login_succeeded`, module `sso`).
+
+### Token validation
+
+Accepted ID token algorithms: RS256/384/512, PS256/384/512, ES256/384/512,
+EdDSA. `none` and HMAC are rejected. Checked: signature against the provider
+JWKS, `iss` equals the configured issuer, `aud` contains `client_id`, `azp`
+equals `client_id` when present or when there are several audiences, `exp`
+(required), `iat`, and the nonce, with one minute of clock leeway. JWKS are
+cached for an hour; a token with an unknown `kid` triggers a refetch, at most
+once a minute per provider.
+
+### Account linking and provisioning
+
+In order:
+
+1. An identity already linked to (connection, `sub`) signs in as that user, whatever the current email claim says.
+2. Otherwise the provider email must be present, verified (`email_verified` true or `"true"`), and in `allowed_email_domains` when that list is non-empty. It is matched against user login emails and employee-profile work emails. Exactly one match is linked; several matches are refused. **Protected users and users holding an all-permission or Admin role are never linked by email**; an administrator links them explicitly.
+3. Otherwise, when `jit_enabled` is on, a user is created with an unusable random password, the default role and group, and status `pending` when `jit_require_approval` is on (login is then refused with `account_pending` until an administrator activates the user). JIT requires at least one allowed domain, and the default role may not be Admin or grant all permissions — checked when saving and again when provisioning.
+
+An SSO login clears an expired password lockout but is refused for disabled,
+pending, deleted or currently locked users.
+
+Group sync (`group_sync_enabled` plus `group_mapping` of provider group →
+NexGestion group id, read from the `groups` claim by default) only adds
+memberships. It never removes memberships, roles or users.
+
+### Not implemented yet
+
+- Administrator UI for connections, identities and audit events (the API is complete).
+- SAML 2.0 (rejected with a clear error), SCIM, provider-initiated logout.
+- Disabling password login. Local password login is always available, which also keeps local administrator recovery possible.

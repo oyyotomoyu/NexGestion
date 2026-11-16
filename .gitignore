@@ -1,0 +1,2 @@
+# SSO client-secret encryption key (server/system/sso.go); never commit it.
+**/sso_secret.key

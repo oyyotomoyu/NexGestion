@@ -40,3 +40,32 @@ func (s *UserService) RoleMemberUserIDs(ctx context.Context, roleID, excludeUser
 	}
 	return ids, rows.Err()
 }
+
+// ActiveGroupMembers lists the active users currently in a group. Used by the
+// Scheduling module for candidate lookup and membership validation
+// (docs/System/scheduling-system.md Section 5.1) without requiring the caller
+// to hold group-manager access.
+func (s *UserService) ActiveGroupMembers(ctx context.Context, groupID string) ([]GroupMember, error) {
+	db, err := s.open()
+	if err != nil {
+		return nil, err
+	}
+	defer db.Close()
+	rows, err := db.QueryContext(ctx, `SELECT u.id, u.display_name, u.email, ug.title FROM user_groups ug
+		JOIN users u ON u.id = ug.user_id
+		WHERE ug.group_id=? AND ug.left_at IS NULL AND u.status='active' AND u.deleted_at IS NULL
+		ORDER BY u.display_name COLLATE NOCASE, u.id`, groupID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	members := []GroupMember{}
+	for rows.Next() {
+		var member GroupMember
+		if err := rows.Scan(&member.UserID, &member.DisplayName, &member.Email, &member.Title); err != nil {
+			return nil, err
+		}
+		members = append(members, member)
+	}
+	return members, rows.Err()
+}

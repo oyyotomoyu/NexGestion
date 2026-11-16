@@ -13,6 +13,10 @@ import Notifications from "@/views/Notifications";
 import Salary from "@/views/Salary";
 import SalaryEmployees from "@/views/SalaryEmployees";
 import Templates from "@/views/Templates";
+import MyShifts from "@/views/Scheduling";
+import SchedulePeriods from "@/views/Scheduling/Periods";
+import SchedulePeriodDetail from "@/views/Scheduling/PeriodDetail";
+import SchedulingSettings from "@/views/Scheduling/Settings";
 import Inventory, { inventoryPages } from "@/views/Inventory";
 import OrdersList from "@/views/Orders/List";
 import OrderDetail from "@/views/Orders/Detail";
@@ -24,6 +28,7 @@ import GroupDetail from "@/views/Settings/Groups/GroupDetail";
 import Users from "@/views/Settings/Users";
 import UserDetail from "@/views/Settings/Users/UserDetail";
 import Security from "@/views/Settings/Security";
+import SystemConfig from "@/views/Settings/SystemConfig";
 
 function SettingsDefaultRedirect({ nested = false }: { nested?: boolean }) {
   const { user } = useAuth();
@@ -37,6 +42,20 @@ function SettingsDefaultRedirect({ nested = false }: { nested?: boolean }) {
   if (hasPermission("roles.access")) return <Navigate to={`${prefix}roles`} replace />;
   if (hasPermission("users.access")) return <Navigate to={`${prefix}users`} replace />;
   if (hasPermission("groups.access")) return <Navigate to={`${prefix}groups`} replace />;
+  if (!nested && hasPermission("system_config.read")) return <Navigate to="system-config" replace />;
+  return <Navigate to="/dashboard" replace />;
+}
+
+// Users who schedule others but have no shifts of their own land on the list.
+function SchedulingHome() {
+  const { user } = useAuth();
+  const has = (key: string) =>
+    user?.is_protected === true || user?.roles.some((role) =>
+      role.grants_all_permissions ||
+      role.permissions.some((permission) => permission.permission_key === key),
+    ) === true;
+  if (has("scheduling.read.self")) return <MyShifts />;
+  if (has("scheduling.read")) return <Navigate to="/scheduling/periods" replace />;
   return <Navigate to="/dashboard" replace />;
 }
 
@@ -99,6 +118,22 @@ const routes: RouteObject[] = [
         element: <ProtectedRoute permission="salary.access"><SalaryEmployees /></ProtectedRoute>,
       },
       {
+        path: "scheduling",
+        element: <ProtectedRoute permission="scheduling.access"><SchedulingHome /></ProtectedRoute>,
+      },
+      {
+        path: "scheduling/periods",
+        element: <ProtectedRoute permission="scheduling.access"><ProtectedRoute permission="scheduling.read"><SchedulePeriods /></ProtectedRoute></ProtectedRoute>,
+      },
+      {
+        path: "scheduling/periods/:periodId",
+        element: <ProtectedRoute permission="scheduling.access"><ProtectedRoute permission="scheduling.read"><SchedulePeriodDetail /></ProtectedRoute></ProtectedRoute>,
+      },
+      {
+        path: "scheduling/settings",
+        element: <ProtectedRoute permission="scheduling.access"><ProtectedRoute permission="scheduling.config.manage"><SchedulingSettings /></ProtectedRoute></ProtectedRoute>,
+      },
+      {
         path: "templates",
         element: <ProtectedRoute permission="templates.access"><Templates /></ProtectedRoute>,
       },
@@ -114,6 +149,10 @@ const routes: RouteObject[] = [
           {
             path: "security",
             element: <ProtectedRoute permission="security.access"><Security /></ProtectedRoute>,
+          },
+          {
+            path: "system-config",
+            element: <ProtectedRoute permission="system_config.read"><SystemConfig /></ProtectedRoute>,
           },
           {
             path: "access-control",

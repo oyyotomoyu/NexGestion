@@ -69,9 +69,9 @@ func attendanceDays(attendance *system.AttendanceService, self bool) http.Handle
 	}
 }
 
-func attendanceLeaveTypes() http.HandlerFunc {
+func attendanceLeaveTypes(attendance *system.AttendanceService) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		types, err := system.LoadLeaveTypes()
+		types, err := attendance.LeaveTypes(r.Context())
 		if err != nil {
 			writeAttendanceError(w, err)
 			return

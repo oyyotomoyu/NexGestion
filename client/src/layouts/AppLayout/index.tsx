@@ -3,6 +3,7 @@ import { NavLink, Outlet, useLocation } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 
 import { useAuth } from "@/auth/AuthProvider";
+import { useBranding } from "@/branding/BrandingProvider";
 import { NexSelect } from "@/components/NexSelect";
 import { NexText } from "@/components/NexText";
 import { changeLanguage } from "@/locales/i18n";
@@ -11,13 +12,13 @@ import {
   isAppLanguage,
   languageOptions,
 } from "@/locales/languages";
-import languageIcon from "@odm/img/language-icon.svg";
 
 import "./style.css";
 
 export default function AppLayout() {
   const { i18n, t } = useTranslation("ui");
   const { user } = useAuth();
+  const branding = useBranding();
   const location = useLocation();
   const [menuOpen, setMenuOpen] = useState(false);
   const menuButtonRef = useRef<HTMLButtonElement>(null);
@@ -124,6 +125,13 @@ export default function AppLayout() {
               <NavLink to="/inventory/inbound">Receive goods</NavLink>
               <NavLink to="/inventory/outbound">Ship goods</NavLink>
             </>}
+            {hasPermission("scheduling.access") ? (
+              <NavLink to="/scheduling" onClick={() => setMenuOpen(false)}>
+                <NexText as="span" variant="label" color="inherit">
+                  {t("global.k_Nav_Scheduling")}
+                </NexText>
+              </NavLink>
+            ) : null}
             {hasPermission("templates.access") ? (
               <NavLink to="/templates" onClick={() => setMenuOpen(false)}>
                 <NexText as="span" variant="label" color="inherit">
@@ -178,7 +186,7 @@ export default function AppLayout() {
         <div className="app-sidebar__language">
           <img
             className="app-sidebar__language-icon"
-            src={languageIcon}
+            src={branding.image("language-icon.svg")}
             alt=""
             aria-hidden="true"
           />

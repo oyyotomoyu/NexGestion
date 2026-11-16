@@ -47,3 +47,27 @@ export async function logout() {
     clearAccessToken();
   }
 }
+
+export interface SSOConnection {
+  id: string;
+  name: string;
+  provider_type: string;
+}
+
+export async function listSSOConnections() {
+  const response = await request<{ items: SSOConnection[] }>(
+    "/api/auth/sso/connections",
+    { method: "GET" },
+    { auth: false, retryOnUnauthorized: false },
+  );
+  return response.items;
+}
+
+export async function startSSOLogin(connectionId: string, returnTo?: string) {
+  const response = await request<{ authorization_url: string }>(
+    `/api/auth/sso/${encodeURIComponent(connectionId)}/start`,
+    { method: "POST", body: JSON.stringify({ return_to: returnTo ?? "" }) },
+    { auth: false, retryOnUnauthorized: false },
+  );
+  return response.authorization_url;
+}

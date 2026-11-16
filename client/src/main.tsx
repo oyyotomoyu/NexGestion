@@ -4,26 +4,18 @@ import { HashRouter } from "react-router-dom";
 
 import { AuthProvider } from "@/auth/AuthProvider";
 import App from "@/views";
-import { NexColor } from "@/components/NexColor";
-import faviconUrl from "@odm/img/favicon.ico?url";
+import { BrandingProvider } from "@/branding/BrandingProvider";
 import "@/locales/i18n";
 import "@/theme/global.css";
 
-const favicon = document.createElement("link");
-favicon.rel = "icon";
-favicon.type = "image/x-icon";
-favicon.sizes = "32x32";
-favicon.href = faviconUrl;
-document.head.append(favicon);
-
 ReactDOM.createRoot(document.getElementById("root") as HTMLElement).render(
   <React.StrictMode>
-    <NexColor>
+    <BrandingProvider>
       <HashRouter>
         <AuthProvider>
           <App />
         </AuthProvider>
       </HashRouter>
-    </NexColor>
+    </BrandingProvider>
   </React.StrictMode>
 );

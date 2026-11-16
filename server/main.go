@@ -61,11 +61,16 @@ func main() {
 	finance := system.NewFinanceService(databaseDirectory, users)
 	security := system.NewSecurityService(databaseDirectory, users, notifications)
 	hr := system.NewHRService(databaseDirectory, users, notifications)
-	apis.InitRouter(mux, users, attendance, notifications, reports, templates, salary, approvals, checkout, crm, finance, security, hr, system.NewAuthService(users), logService, system.NewInventoryService(databaseDirectory))
+	scheduling := system.NewSchedulingService(databaseDirectory, users)
+	auth := system.NewAuthService(users)
+	sso := system.NewSSOService(databaseDirectory, users, auth)
+	generalAffairs := system.NewGeneralAffairsService(databaseDirectory, users, approvals, notifications)
+	apis.InitRouter(mux, users, attendance, notifications, reports, templates, salary, approvals, checkout, crm, finance, security, hr, scheduling, sso, generalAffairs, system.NewSystemConfigService(databaseDirectory), auth, logService, system.NewInventoryService(databaseDirectory))
 	apis.RegisterOperationsRoutes(mux, system.NewOrderService(databaseDirectory), system.NewProcurementService(databaseDirectory), system.NewProductionService(databaseDirectory), users, system.NewAuthService(users), logService)
 	go runAttendanceMaintenance(attendance, logService)
 	go runNotificationMaintenance(notifications, logService)
 	go runSecurityMaintenance(security, logService)
+	go runGeneralAffairsMaintenance(generalAffairs, logService)
 	mux.Handle("/", spaHandler(distDir))
 
 	server := &http.Server{
@@ -86,6 +91,20 @@ func runNotificationMaintenance(notifications *system.NotificationService, logSe
 	run := func() {
 		if err := notifications.ExpireAndCleanup(context.Background()); err != nil {
 			_ = logService.Log("error", "notification maintenance failed: "+err.Error())
+		}
+	}
+	run()
+	ticker := time.NewTicker(time.Hour)
+	defer ticker.Stop()
+	for range ticker.C {
+		run()
+	}
+}
+
+func runGeneralAffairsMaintenance(generalAffairs *system.GeneralAffairsService, logService *applogs.Service) {
+	run := func() {
+		if err := generalAffairs.RunMaintenance(context.Background()); err != nil {
+			_ = logService.Log("error", "general affairs maintenance failed: "+err.Error())
 		}
 	}
 	run()

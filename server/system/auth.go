@@ -29,6 +29,7 @@ var (
 	ErrAccountLocked      = errors.New("account is temporarily locked")
 	ErrAccountInactive    = errors.New("account is not active")
 	ErrInvalidToken       = errors.New("invalid or expired token")
+	ErrAccountPending     = errors.New("account is awaiting approval")
 )
 
 type AccessClaims struct {
@@ -94,6 +95,50 @@ func (s *AuthService) Login(ctx context.Context, email, password, ipAddress, use
 		return nil, err
 	}
 	return s.issueTokens(ctx, db, id, ipAddress, userAgent, now)
+}
+
+// IssueSSOSession creates the normal NexGestion session for a user whose
+// identity an SSO connection has already verified (SSO.md "SSO login must end
+// with the same session model as password login"). Password failure counters
+// are left alone; an expired password lockout is cleared, an administrator
+// lock (no expiry) or an active lockout still blocks the login.
+func (s *AuthService) IssueSSOSession(ctx context.Context, userID, ipAddress, userAgent string) (*AuthTokens, error) {
+	db, err := s.users.open()
+	if err != nil {
+		return nil, err
+	}
+	defer db.Close()
+	var status string
+	var lockedUntil, deletedAt sql.NullString
+	err = db.QueryRowContext(ctx, `SELECT status, locked_until, deleted_at FROM users WHERE id = ?`, userID).Scan(&status, &lockedUntil, &deletedAt)
+	if errors.Is(err, sql.ErrNoRows) {
+		return nil, ErrUserNotFound
+	}
+	if err != nil {
+		return nil, err
+	}
+	now := time.Now().UTC()
+	switch {
+	case deletedAt.Valid, status == "disabled":
+		return nil, ErrAccountInactive
+	case status == "pending":
+		return nil, ErrAccountPending
+	case status == "locked":
+		until, parseErr := time.Parse(time.RFC3339, lockedUntil.String)
+		if !lockedUntil.Valid || parseErr != nil || now.Before(until) {
+			return nil, ErrAccountLocked
+		}
+	case status != "active":
+		return nil, ErrAccountInactive
+	}
+	if _, err := db.ExecContext(ctx, `UPDATE users SET last_login_at = ?, updated_at = ?,
+		failed_login_count = CASE WHEN status = 'locked' THEN 0 ELSE failed_login_count END,
+		locked_until = CASE WHEN status = 'locked' THEN NULL ELSE locked_until END,
+		status = CASE WHEN status = 'locked' THEN 'active' ELSE status END WHERE id = ?`,
+		now.Format(time.RFC3339), now.Format(time.RFC3339), userID); err != nil {
+		return nil, err
+	}
+	return s.issueTokens(ctx, db, userID, ipAddress, userAgent, now)
 }
 
 func (s *AuthService) Refresh(ctx context.Context, rawToken, ipAddress, userAgent string) (*AuthTokens, error) {

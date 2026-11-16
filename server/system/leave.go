@@ -71,6 +71,16 @@ type DecideLeaveInput struct {
 	Note     string `json:"note"`
 }
 
+// LeaveTypes returns the active leave types an employee may apply for. The
+// catalog lives in system.db and is edited through System Config
+// (docs/System/system-config.md Section 3); config/leave-types.json is only
+// its seed.
+func (s *AttendanceService) LeaveTypes(ctx context.Context) ([]LeaveType, error) {
+	return ActiveLeaveTypes(ctx, filepath.Dir(s.databasePath))
+}
+
+// LoadLeaveTypes reads the default catalog file (the seed and the "restore
+// defaults" source), not the live catalog.
 func LoadLeaveTypes() ([]LeaveType, error) {
 	path, err := leaveTypesPath()
 	if err != nil {
@@ -123,7 +133,7 @@ func (s *AttendanceService) ApplyLeave(ctx context.Context, userID string, input
 	if _, err := s.users.Get(ctx, userID); err != nil {
 		return nil, err
 	}
-	types, err := LoadLeaveTypes()
+	types, err := s.LeaveTypes(ctx)
 	if err != nil {
 		return nil, err
 	}
